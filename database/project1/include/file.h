@@ -10,42 +10,47 @@
 #define PAGESIZE 4096
 typedef uint64_t pagenum_t;
 
-typedef struct leafRecord {
-    uint64_t key;
+typedef struct leafRecord_t {
+    int64_t key;
     char value[120];
-} leafRecord;
-typedef struct internalRecord {
-    uint64_t key;
+} leafRecord_t;
+
+typedef struct internalRecord_t {
+    int64_t key;
     pagenum_t pageNum;
-} internalRecord;
+} internalRecord_t;
+
 //header
-typedef struct headerPage {
+typedef struct headerPage_t {
             pagenum_t freePageNum;
             pagenum_t rootPageNum;
             uint64_t numOfPages;
             char headerPageReserved[PAGESIZE - 24];
-} headerPage;
-typedef struct freePage {
+} headerPage_t;
+
+typedef struct freePage_t {
     pagenum_t nextFreePageNum;
     char freePageReserved[PAGESIZE - 8];
-} freePage;
-typedef struct internalPage{ 
+} freePage_t;
+
+typedef struct internalPage_t { 
     pagenum_t parentPageNum;
     int isLeaf;
     int numOfKeys;
     char internalPageHeaderReserved[104];
     pagenum_t leftMostPageNum;
-    internalRecord record[248];
-} internalPage;
+    internalRecord_t record[248];
+} internalPage_t;
+
 // leaf page
-typedef struct leafPage{
+typedef struct leafPage_t {
     pagenum_t parentPageNum;
     int isLeaf;
     int numOfKeys;
     char leafPageHeaderReserved[104];
     pagenum_t rightSiblingPageNum;  //If rightmost leaf page, right sibling page number field is 0.
-    leafRecord record[31];
-} leafPage;
+    leafRecord_t record[31];
+} leafPage_t;
 
 typedef struct page_t {
     char reserved[PAGESIZE];

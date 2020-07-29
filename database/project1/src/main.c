@@ -13,8 +13,10 @@ int main( int argc, char ** argv ) {
 
     // init();
     if ((fd = open("db",O_RDWR |O_CREAT |O_EXCL,0644)) > 0) { //not exist
-        headerPage* header = (headerPage*)malloc(sizeof(struct headerPage));
-        header -> rootPageNum = 1;
+        headerPage_t* header = (headerPage_t*)malloc(sizeof(struct headerPage_t));
+        header -> rootPageNum = 0;
+        header -> numOfPages = 1;
+        header -> freePageNum = 0;
         lseek(fd, 0 , SEEK_SET);
         write(fd, header, PAGESIZE);
         free(header);
