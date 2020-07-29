@@ -2,3 +2,4 @@ database/**/*.o
 database/**/*.a
 database/**/main
 .vscode
+db

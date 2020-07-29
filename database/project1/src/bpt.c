@@ -36,12 +36,31 @@ int startNewTree(int64_t key, char* value) {
 }
 
 int insertIntoLeaf(pagenum_t leafPageNum, int64_t key, char* value) {
+    printf("insertIntoLeaf:: leafPageNum:%d, key:%d, value:%s\n",leafPageNum, key, value);
+    int i, insertionPoint;
+    page_t* page = (page_t*)malloc(sizeof(struct page_t));
+    file_read_page(leafPageNum, page);
 
+    insertionPoint = 0;
+    while (insertionPoint < ((leafPage_t*)page) -> numOfKeys 
+                         && ((leafPage_t*)page) -> record[insertionPoint].key < key) {
+        insertionPoint++;
+    }
+
+    for (i = ((leafPage_t*)page) -> numOfKeys; i > insertionPoint; i--) {
+        ((leafPage_t*)page) -> record[i].key = ((leafPage_t*)page) -> record[i - 1].key;
+        strcpy(((leafPage_t*)page) -> record[i].value, ((leafPage_t*)page) -> record[i - 1].value);
+    }
+    ((leafPage_t*)page) -> record[insertionPoint].key = key;
+    strcpy(((leafPage_t*)page) -> record[insertionPoint].value, value);
+    (((leafPage_t*)page) -> numOfKeys)++;
+    return SUCCESS;
 }
 
 // Insert input ‘key/value’ (record) to data file at the right place.
 // If success, return 0. Otherwise, return non-zero value.
 int db_insert(int64_t key, char * value) {
+    printf("dbinsert\nkey:%d value: %s\n", key ,value);
     page_t* page = (page_t*)malloc(sizeof(struct page_t));
     pagenum_t leafPageNum;
     char* tmp = (char*)malloc(sizeof(char) * 120);
@@ -69,7 +88,8 @@ int db_insert(int64_t key, char * value) {
     file_read_page(leafPageNum, page);
 
     if (((leafPage_t*)page) -> numOfKeys < LEAF_ORDER - 1) {
-
+        free(page);
+        return insertIntoLeaf(leafPageNum, key, value);
     }
 
 
@@ -81,6 +101,7 @@ int db_insert(int64_t key, char * value) {
 // • If found matching ‘key’, store matched ‘value’ string in ret_val and return 0. Otherwise, return
 // non-zero value.
 int db_find(int64_t key, char * ret_val) {
+    printf("dbfind\n");
     pagenum_t pageNum;
     int i = 0;
     pageNum = findLeaf(key);

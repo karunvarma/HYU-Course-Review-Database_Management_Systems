@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include "file.h"
 #ifdef WINDOWS
 #define bool char
 #define false 0
@@ -170,6 +171,9 @@ void destroy_tree_nodes(node *root);
 node *destroy_tree(node *root);
 
 int open_table(char *pathname);
+
+int startNewTree(int64_t key, char* value);
+int insertIntoLeaf(pagenum_t leafPageNum, int64_t key, char* value);
 int db_insert(int64_t key, char *value);
 int db_find(int64_t key, char *ret_val);
 int db_delete(int64_t key);
