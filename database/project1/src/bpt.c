@@ -1,12 +1,4 @@
-#define headerPageNum 0
-#define SUCCESS 0
-#define FAIL -1
-#define LEAF_ORDER 31
-#define INTERNAL_ORDER 248
-
 #include "bpt.h"
-#include "file.h"
-#include <string.h>
 // GLOBALS.
 
 int open_table(char *pathname) {
@@ -16,17 +8,18 @@ int startNewTree(int64_t key, char* value) {
     page_t* page = (page_t*)malloc(sizeof(struct page_t));
     page_t* headerPage = (page_t*)malloc(sizeof(struct page_t));
 
+    ((leafPage_t*)page) -> parentPageNum = 0;
     ((leafPage_t*)page) -> isLeaf = 1;
+    ((leafPage_t*)page) -> numOfKeys = 1;
+    ((leafPage_t*)page) -> rightSiblingPageNum = 0;
     ((leafPage_t*)page) -> record[0].key = key;
     strcpy(((leafPage_t*)page) -> record[0].value, value);
-    ((leafPage_t*)page) -> numOfKeys = 1;
-    ((leafPage_t*)page) -> parentPageNum = 0;
     //update headerpage
-    file_read_page(headerPageNum, headerPage);
+    file_read_page(HEADERPAGENUM, headerPage);
     (((headerPage_t*)headerPage) -> numOfPages)++;
-    ((headerPage_t*)headerPage) -> rootPageNum = 1;
+    ((headerPage_t*)headerPage) -> rootPageNum = file_alloc_page();
 
-    file_write_page(headerPageNum, headerPage);
+    file_write_page(HEADERPAGENUM, headerPage);
     file_write_page(((headerPage_t*)headerPage) -> rootPageNum, page);
 
     free(page);
@@ -36,7 +29,6 @@ int startNewTree(int64_t key, char* value) {
 }
 
 int insertIntoLeaf(pagenum_t leafPageNum, int64_t key, char* value) {
-    printf("insertIntoLeaf:: leafPageNum:%d, key:%d, value:%s\n",leafPageNum, key, value);
     int i, insertionPoint;
     page_t* page = (page_t*)malloc(sizeof(struct page_t));
     file_read_page(leafPageNum, page);
@@ -59,25 +51,141 @@ int insertIntoLeaf(pagenum_t leafPageNum, int64_t key, char* value) {
     return SUCCESS;
 }
 
+int cut( int length ) {
+    if (length % 2 == 0)
+        return length/2;
+    else
+        return length/2 + 1;
+}
+
+int insertIntoNewRoot(pagenum_t oldLeafPageNum, int64_t newKey, pagenum_t newLeafPageNum) {
+    page_t* root = (page_t*)malloc(sizeof(struct page_t));
+    page_t* oldLeaf = (page_t*)malloc(sizeof(struct page_t));
+    page_t* newLeaf = (page_t*)malloc(sizeof(struct page_t));
+    page_t* header = (page_t*)malloc(sizeof(struct page_t));
+    pagenum_t rootPageNum;
+
+    rootPageNum = file_alloc_page();
+    file_read_page(HEADERPAGENUM, header);
+    file_read_page(oldLeafPageNum, oldLeaf);
+    file_read_page(newLeafPageNum, newLeaf);
+
+    ((headerPage_t*)header) -> rootPageNum = rootPageNum;
+    ((internalPage_t*)root) -> parentPageNum = HEADERPAGENUM;
+    ((internalPage_t*)root) -> isLeaf = 0;
+    (((internalPage_t*)root) -> numOfKeys)++;
+    ((internalPage_t*)root) -> leftMostPageNum = oldLeafPageNum;
+    ((internalPage_t*)root) -> record[0].key = newKey;
+    ((internalPage_t*)root) -> record[0].pageNum = newLeafPageNum;
+    ((leafPage_t*)oldLeaf) -> parentPageNum = rootPageNum;
+    ((leafPage_t*)newLeaf) -> parentPageNum = rootPageNum;
+
+    file_write_page(HEADERPAGENUM, header);
+    file_write_page(oldLeafPageNum, oldLeaf);
+    file_write_page(newLeafPageNum, newLeaf);
+    file_write_page(rootPageNum, root);
+
+    free(header);
+    free(root);
+    free(oldLeaf);
+    free(newLeaf);
+    return SUCCESS;
+}
+int insertIntoParent(pagenum_t oldLeafPageNum, int64_t newKey, pagenum_t newLeafPageNum) {
+
+    page_t* oldLeaf;
+    pagenum_t parentPageNum;
+    oldLeaf = (page_t*)malloc(sizeof(struct page_t));
+    file_read_page(oldLeafPageNum, oldLeaf);
+    parentPageNum = ((leafPage_t*)oldLeaf) -> parentPageNum;
+
+    if (parentPageNum == HEADERPAGENUM) {
+        free(oldLeaf);
+        return insertIntoNewRoot(oldLeafPageNum, newKey, newLeafPageNum);
+    }
+    return SUCCESS;
+
+}
+int insertIntoLeafAfterSplitting(pagenum_t oldLeafPageNum, int64_t key, char* value) {
+
+    page_t* newLeaf, * oldLeaf;
+    pagenum_t newLeafPageNum;
+    leafRecord_t* temporaryRecord;
+    int insertionIndex, split, i, j;
+    int64_t newKey;
+
+    newLeaf = (page_t*)malloc(sizeof(struct page_t));
+    oldLeaf = (page_t*)malloc(sizeof(struct page_t));
+    temporaryRecord = (leafRecord_t*)malloc(sizeof(struct leafRecord_t) * LEAF_ORDER);
+    ((leafPage_t*)newLeaf) -> parentPageNum = 0;
+    ((leafPage_t*)newLeaf) -> isLeaf = 1;
+    ((leafPage_t*)newLeaf) -> numOfKeys = 0;
+    ((leafPage_t*)newLeaf) -> rightSiblingPageNum = 0;
+
+    file_read_page(oldLeafPageNum, oldLeaf);
+    newLeafPageNum = file_alloc_page();
+
+    insertionIndex = 0;
+    while (insertionIndex < LEAF_ORDER - 1 && ((leafPage_t*)oldLeaf) -> record[insertionIndex].key < key) {
+        insertionIndex++;
+    }
+// ((leafPage_t*)oldLeaf) ->
+    for (i = 0, j = 0; i < ((leafPage_t*)oldLeaf) -> numOfKeys; i++, j++) {
+        if (j == insertionIndex) j++;
+        temporaryRecord[j].key = ((leafPage_t*)oldLeaf) ->record[i].key;
+        strcpy(temporaryRecord[j].value, ((leafPage_t*)oldLeaf) ->record[i].value);
+    }
+
+    temporaryRecord[insertionIndex].key = key;
+    strcpy(temporaryRecord[insertionIndex].value, value);
+
+    ((leafPage_t*)oldLeaf) -> numOfKeys = 0;
+    split = cut(LEAF_ORDER - 1);
+
+    for (i = 0; i < split; i++) {
+        ((leafPage_t*)oldLeaf) -> record[i].key = temporaryRecord[i].key;
+        strcpy(((leafPage_t*)oldLeaf) -> record[i].value, temporaryRecord[i].value);
+        (((leafPage_t*)oldLeaf) -> numOfKeys)++;
+    }
+
+    for (i = split, j = 0; i < LEAF_ORDER; i++, j++) {
+        ((leafPage_t*)newLeaf) -> record[j].key = temporaryRecord[i].key;
+        strcpy(((leafPage_t*)newLeaf) -> record[j].value, temporaryRecord[i].value);
+        (((leafPage_t*)newLeaf) -> numOfKeys)++;
+    }
+
+    free(temporaryRecord);
+
+    ((leafPage_t*)newLeaf) -> rightSiblingPageNum = ((leafPage_t*)oldLeaf) -> rightSiblingPageNum;
+    ((leafPage_t*)oldLeaf) -> rightSiblingPageNum = newLeafPageNum;
+
+    ((leafPage_t*)newLeaf) -> parentPageNum = ((leafPage_t*)oldLeaf) -> parentPageNum;
+    newKey = ((leafPage_t*)newLeaf) -> record[0].key;
+
+    file_write_page(newLeafPageNum, newLeaf);
+    file_write_page(oldLeafPageNum, oldLeaf);
+    free(newLeaf);
+    free(oldLeaf);
+    return insertIntoParent(oldLeafPageNum, newKey, newLeafPageNum);
+}
 // Insert input ‘key/value’ (record) to data file at the right place.
 // If success, return 0. Otherwise, return non-zero value.
 int db_insert(int64_t key, char * value) {
-    printf("dbinsert\nkey:%d value: %s\n", key ,value);
     page_t* page = (page_t*)malloc(sizeof(struct page_t));
     pagenum_t leafPageNum;
     char* tmp = (char*)malloc(sizeof(char) * 120);
 
     //check if key is already in the tree
     if (db_find(key, tmp) == SUCCESS) {
-        printf("key is already in the tree\n");
-        printf("db_insert fail");
+        printf("[ERROR]: key is already in the tree\n");
+        printf("[ERROR]: db_insert fail\n");
         free(tmp);
         free(page);
         return FAIL;
     }
     free(tmp);
     
-    file_read_page(headerPageNum, page);
+    file_read_page(HEADERPAGENUM, page);
 
     //there's no rootpage
     if (((headerPage_t*)page) -> rootPageNum == 0) {
@@ -97,13 +205,13 @@ int db_insert(int64_t key, char * value) {
 
 
     free(page);
+    return insertIntoLeafAfterSplitting(leafPageNum, key, value);
 }
 
 // Find the record containing input ‘key’.
 // • If found matching ‘key’, store matched ‘value’ string in ret_val and return 0. Otherwise, return
 // non-zero value.
 int db_find(int64_t key, char * ret_val) {
-    printf("dbfind\n");
     pagenum_t pageNum;
     int i = 0;
     pageNum = findLeaf(key);
@@ -137,7 +245,7 @@ int db_delete(int64_t key) {
 pagenum_t findLeaf(int64_t key) {
     page_t* page = (page_t*)malloc(sizeof(struct page_t));
     pagenum_t leafPageNum;
-    file_read_page(headerPageNum, page);
+    file_read_page(HEADERPAGENUM, page);
     pagenum_t rootPageNum = ((headerPage_t*)page) -> rootPageNum;
     file_read_page(rootPageNum, page);
     int i = 0;

@@ -12,9 +12,13 @@ pagenum_t file_alloc_page() {
     read(fd, &freePageNum, sizeof(pagenum_t));
 
     if (freePageNum == 0) {
-        lssek(fd, 16, SEEK_SET);
+        lseek(fd, 16, SEEK_SET);
         read(fd, &numOfPages, sizeof(uint64_t));
         freePageNum = numOfPages;
+        numOfPages++;
+
+        lseek(fd, 16, SEEK_SET);
+        write(fd, &numOfPages, sizeof(pagenum_t));
         return freePageNum;
     }
     while (freePageNum != 0) {
@@ -23,7 +27,7 @@ pagenum_t file_alloc_page() {
         read(fd, &freePageNum, sizeof(pagenum_t));
 
     }
-    
+    //TODO: update free file list
     return prevFreePageNum; 
 
 };
