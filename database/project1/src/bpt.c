@@ -54,6 +54,8 @@ int insertIntoLeaf(pagenum_t leafPageNum, int64_t key, char* value) {
     ((leafPage_t*)page) -> record[insertionPoint].key = key;
     strcpy(((leafPage_t*)page) -> record[insertionPoint].value, value);
     (((leafPage_t*)page) -> numOfKeys)++;
+    file_write_page(leafPageNum, page);
+    free(page);
     return SUCCESS;
 }
 
@@ -66,7 +68,7 @@ int db_insert(int64_t key, char * value) {
     char* tmp = (char*)malloc(sizeof(char) * 120);
 
     //check if key is already in the tree
-    if (db_find(key, tmp) == 0) {
+    if (db_find(key, tmp) == SUCCESS) {
         printf("key is already in the tree\n");
         printf("db_insert fail");
         free(tmp);
@@ -105,6 +107,9 @@ int db_find(int64_t key, char * ret_val) {
     pagenum_t pageNum;
     int i = 0;
     pageNum = findLeaf(key);
+    if (pageNum == 0) {
+        return FAIL;
+    }
     page_t* page = (page_t*)malloc(sizeof(struct page_t));
     file_read_page(pageNum, page);
 
@@ -138,7 +143,10 @@ pagenum_t findLeaf(int64_t key) {
     int i = 0;
 
     leafPageNum = rootPageNum;
-    while (((internalPage_t*)page) -> isLeaf) {
+    if (leafPageNum == 0) {
+        return 0;
+    }
+    while (!((internalPage_t*)page) -> isLeaf) {
         i = 0;
         while (i < ((internalPage_t*)page) -> numOfKeys) {
             if (key < ((internalPage_t*)page) -> record[i].key) {
