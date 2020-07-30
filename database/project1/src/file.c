@@ -1,9 +1,32 @@
 #include "file.h"
+
 extern int fd;
 
 
 // Allocate an on-disk page from the free page list
-pagenum_t file_alloc_page();
+pagenum_t file_alloc_page() {
+    pagenum_t freePageNum, prevFreePageNum;
+    uint64_t numOfPages;
+
+    lseek(fd, 0, SEEK_SET);
+    read(fd, &freePageNum, sizeof(pagenum_t));
+
+    if (freePageNum == 0) {
+        lssek(fd, 16, SEEK_SET);
+        read(fd, &numOfPages, sizeof(uint64_t));
+        freePageNum = numOfPages;
+        return freePageNum;
+    }
+    while (freePageNum != 0) {
+        prevFreePageNum = freePageNum;
+        lseek(fd, freePageNum * PAGESIZE, SEEK_SET);
+        read(fd, &freePageNum, sizeof(pagenum_t));
+
+    }
+    
+    return prevFreePageNum; 
+
+};
 // Free an on-disk page to the free page list
 void file_free_page(pagenum_t pagenum);
 // Read an on-disk page into the in-memory page structure(dest)

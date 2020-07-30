@@ -22,18 +22,24 @@ typedef struct internalRecord_t {
 
 //header
 typedef struct headerPage_t {
-            pagenum_t freePageNum;
-            pagenum_t rootPageNum;
-            uint64_t numOfPages;
-            char headerPageReserved[PAGESIZE - 24];
+// points the first free page (head of free page list)
+// - 0, if there is no free page left.
+    pagenum_t freePageNum;
+    pagenum_t rootPageNum;
+    uint64_t numOfPages;
+    char headerPageReserved[PAGESIZE - 24];
 } headerPage_t;
 
 typedef struct freePage_t {
+//     points the next free page.
+//  0, if end of the free page list.
     pagenum_t nextFreePageNum;
     char freePageReserved[PAGESIZE - 8];
 } freePage_t;
 
 typedef struct internalPage_t { 
+//     If internal/leaf page, this 
+// field points the position of parent page.
     pagenum_t parentPageNum;
     int isLeaf;
     int numOfKeys;
@@ -44,6 +50,8 @@ typedef struct internalPage_t {
 
 // leaf page
 typedef struct leafPage_t {
+//     If internal/leaf page, this 
+// field points the position of parent page.
     pagenum_t parentPageNum;
     int isLeaf;
     int numOfKeys;
