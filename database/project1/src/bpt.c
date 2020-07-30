@@ -91,18 +91,63 @@ int insertIntoNewRoot(pagenum_t oldLeafPageNum, int64_t newKey, pagenum_t newLea
     free(newLeaf);
     return SUCCESS;
 }
+
+//if leftchild is the leftmost child , return -1
+int getIndexOfLeft(pagenum_t parentPageNum, pagenum_t leftChildPageNum) {
+    int IndexOfLeftChild = 0;
+    page_t* parent = (page_t*)malloc(sizeof(struct page_t));
+    file_read_page(parentPageNum, parent);
+
+    if (((internalPage_t*)parent) -> leftMostPageNum == leftChildPageNum) {
+        free(parent);
+        return -1;
+    }
+    while (IndexOfLeftChild <= ((internalPage_t*)parent) -> numOfKeys 
+           && ((internalPage_t*)parent) -> record[IndexOfLeftChild].pageNum != leftChildPageNum) {
+               IndexOfLeftChild++;
+           }
+    free(parent);
+    return IndexOfLeftChild;
+}
+int insertIntoInternal(pagenum_t parentPageNum, int leftIndex, int64_t newKey, pagenum_t newLeafPageNum) {
+    int i;
+    page_t* parent = (page_t*)malloc(sizeof(struct page_t));
+    file_read_page(parentPageNum, parent);
+    
+    for (i = (((internalPage_t*)parent) -> numOfKeys) - 1; i > leftIndex; i--) {
+        ((internalPage_t*)parent) -> record[i + 1].key = ((internalPage_t*)parent) -> record[i].key;
+        ((internalPage_t*)parent) -> record[i + 1].pageNum = ((internalPage_t*)parent) -> record[i].pageNum; 
+    }
+    ((internalPage_t*)parent) -> record[leftIndex + 1].key = newKey;
+    ((internalPage_t*)parent) -> record[leftIndex + 1].pageNum = newLeafPageNum;
+    (((internalPage_t*)parent) -> numOfKeys)++;
+    file_write_page(parentPageNum, parent);
+    free(parent);
+    return SUCCESS;
+}
 int insertIntoParent(pagenum_t oldLeafPageNum, int64_t newKey, pagenum_t newLeafPageNum) {
 
-    page_t* oldLeaf;
+    int leftIndex;
+    page_t* oldLeaf, * parent;
     pagenum_t parentPageNum;
     oldLeaf = (page_t*)malloc(sizeof(struct page_t));
     file_read_page(oldLeafPageNum, oldLeaf);
     parentPageNum = ((leafPage_t*)oldLeaf) -> parentPageNum;
-
+    free(oldLeaf);
+    //oldLeaf was rootPage
     if (parentPageNum == HEADERPAGENUM) {
-        free(oldLeaf);
         return insertIntoNewRoot(oldLeafPageNum, newKey, newLeafPageNum);
     }
+    leftIndex = getIndexOfLeft(parentPageNum, oldLeafPageNum);
+
+    parent = (page_t*)malloc(sizeof(struct page_t));
+    file_read_page(parentPageNum, parent);
+    if (((internalPage_t*)parent) -> numOfKeys < INTERNAL_ORDER - 1) {
+        free(parent);
+        return insertIntoInternal(parentPageNum, leftIndex, newKey, newLeafPageNum);
+    }
+    
+
     return SUCCESS;
 
 }
