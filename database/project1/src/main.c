@@ -14,7 +14,7 @@ void printHeader(headerPage_t* headerPage) {
 }
 void printInternal(internalPage_t* internalPage) {
     printf("InternalPage\n");
-    printf("internalPage -> isLeaf: %d\ninternalPage -> numOfKeys: %d\ninternalPage ->leftMostPageNum: %d\n", internalPage -> isLeaf, internalPage -> numOfKeys, internalPage ->leftMostPageNum);
+    printf("internalPage -> parentPageNum: %d\ninternalPage -> isLeaf: %d\ninternalPage -> numOfKeys: %d\ninternalPage ->leftMostPageNum: %d\n", internalPage -> parentPageNum, internalPage -> isLeaf, internalPage -> numOfKeys, internalPage ->leftMostPageNum);
     for (int i = 0; i < internalPage -> numOfKeys; i++) {
         printf("internalPage -> record[%d].key: %d, internalPage -> record[%d].pageNum: %d\n", i, internalPage -> record[i].key, i, internalPage -> record[i].pageNum);
     }
@@ -22,7 +22,7 @@ void printInternal(internalPage_t* internalPage) {
 }
 void printLeaf(leafPage_t* leafPage) {
     printf("LeafPage\n");
-    printf("leafPage -> isLeaf: %d\nleafPage -> numOfKeys: %d\nleafPage -> rightSiblingPageNum: %d\n", leafPage -> isLeaf, leafPage -> numOfKeys, leafPage -> rightSiblingPageNum);
+    printf("leafPage -> parentPageNum: %d\nleafPage -> isLeaf: %d\nleafPage -> numOfKeys: %d\nleafPage -> rightSiblingPageNum: %d\n", leafPage -> parentPageNum, leafPage -> isLeaf, leafPage -> numOfKeys, leafPage -> rightSiblingPageNum);
     for (int i = 0; i < leafPage -> numOfKeys; i++) {
         printf("leafPage -> record[%d].key: %d, leafPage -> record[%d].value: %s\n", i, leafPage -> record[i].key, i, leafPage -> record[i].value);
     }

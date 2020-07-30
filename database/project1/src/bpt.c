@@ -73,6 +73,7 @@ int insertIntoNewRoot(pagenum_t oldLeafPageNum, int64_t newKey, pagenum_t newLea
     ((headerPage_t*)header) -> rootPageNum = rootPageNum;
     ((internalPage_t*)root) -> parentPageNum = HEADERPAGENUM;
     ((internalPage_t*)root) -> isLeaf = 0;
+    ((internalPage_t*)root) -> numOfKeys = 0;
     (((internalPage_t*)root) -> numOfKeys)++;
     ((internalPage_t*)root) -> leftMostPageNum = oldLeafPageNum;
     ((internalPage_t*)root) -> record[0].key = newKey;
@@ -125,6 +126,75 @@ int insertIntoInternal(pagenum_t parentPageNum, int leftIndex, int64_t newKey, p
     free(parent);
     return SUCCESS;
 }
+
+//insert new key to parent, parent need to be splitted to parent and rightparent
+int insertIntoInternalAfterSplitting(pagenum_t parentPageNum, int leftIndex, int64_t newKey, pagenum_t rightChildPageNum) {
+    internalRecord_t* temporaryRecord;
+    page_t* parent, * rightParent;
+    pagenum_t rightParentPageNum;
+
+    int i, j, split;
+    int64_t kPrime;
+
+    temporaryRecord = (internalRecord_t*)malloc(sizeof(struct internalRecord_t) * INTERNAL_ORDER);
+    parent = (page_t*)malloc(sizeof(struct page_t));
+    rightParent = (page_t*)malloc(sizeof(struct page_t));
+    rightParentPageNum = file_alloc_page();
+    file_read_page(parentPageNum, parent);
+    for(i = 0, j = 0; i < ((internalPage_t*)parent) -> numOfKeys; i++, j++) {
+        if (j == leftIndex + 1) j++;
+        temporaryRecord[j].key = ((internalPage_t*)parent) -> record[i].key;
+        temporaryRecord[j].pageNum = ((internalPage_t*)parent) -> record[i].pageNum;
+    }
+
+    temporaryRecord[leftIndex + 1].key = newKey;
+    temporaryRecord[leftIndex + 1].pageNum =  rightChildPageNum;
+
+    split = cut(INTERNAL_ORDER);
+    ((internalPage_t*)parent) -> numOfKeys = 0;
+    for (i = 0; i < split - 1; i++){
+        ((internalPage_t*)parent) -> record[i].key = temporaryRecord[i].key;
+        ((internalPage_t*)parent) -> record[i].pageNum = temporaryRecord[i].pageNum;
+        (((internalPage_t*)parent) -> numOfKeys)++;
+    }
+    ((internalPage_t*)rightParent) -> parentPageNum = 0;
+    ((internalPage_t*)rightParent) -> isLeaf = 0;
+    ((internalPage_t*)rightParent) -> numOfKeys = 0;
+
+    ((internalPage_t*)rightParent) -> leftMostPageNum = temporaryRecord[i].pageNum;
+    kPrime = temporaryRecord[i].key;
+
+    for(++i, j = 0; i < INTERNAL_ORDER; i++, j++) {
+        ((internalPage_t*)rightParent) -> record[j].key = temporaryRecord[i].key;
+        ((internalPage_t*)rightParent) -> record[j].pageNum = temporaryRecord[i].pageNum;
+        (((internalPage_t*)rightParent) -> numOfKeys)++;
+    }
+    free(temporaryRecord);
+
+    ((internalPage_t*)rightParent) -> parentPageNum = ((internalPage_t*)parent) -> parentPageNum;
+
+    page_t* child = (page_t*)malloc(sizeof(struct page_t));
+    pagenum_t childPageNum = ((internalPage_t*)rightParent) -> leftMostPageNum;
+
+    file_read_page(childPageNum, child);
+    ((internalPage_t*)child) -> parentPageNum = rightParentPageNum;
+    file_write_page(childPageNum, child);
+
+    for (i = 0; i < ((internalPage_t*)rightParent) -> numOfKeys; i++) {
+        childPageNum = ((internalPage_t*)rightParent) -> record[i].pageNum;
+        file_read_page(childPageNum, child);
+        ((internalPage_t*)child) -> parentPageNum = rightParentPageNum;
+        file_write_page(childPageNum, child);
+    }
+    file_write_page(parentPageNum, parent);
+    file_write_page(rightParentPageNum, rightParent);
+    free(child);
+    free(parent);
+    free(rightParent);
+    return insertIntoParent(parentPageNum, kPrime, rightParentPageNum);
+
+
+}
 int insertIntoParent(pagenum_t oldLeafPageNum, int64_t newKey, pagenum_t newLeafPageNum) {
 
     int leftIndex;
@@ -147,6 +217,8 @@ int insertIntoParent(pagenum_t oldLeafPageNum, int64_t newKey, pagenum_t newLeaf
         return insertIntoInternal(parentPageNum, leftIndex, newKey, newLeafPageNum);
     }
     
+    free(parent);
+    return insertIntoInternalAfterSplitting(parentPageNum, leftIndex, newKey, newLeafPageNum);
 
     return SUCCESS;
 

@@ -19,7 +19,7 @@
 // #define LEAF_ORDER 31
 // #define INTERNAL_ORDER 248
 #define LEAF_ORDER 3
-#define INTERNAL_ORDER 4
+#define INTERNAL_ORDER 3
 
 
 
@@ -33,10 +33,10 @@ int startNewTree(int64_t key, char* value);
 int insertIntoLeaf(pagenum_t oldLeafPageNum, int64_t key, char* value);
 int insertIntoNewRoot(pagenum_t oldLeafPageNum, int64_t newKey, pagenum_t newLeafPageNum);
 int insertIntoInternal(pagenum_t parentPageNum, int leftIndex, int64_t newKey, pagenum_t newLeafPageNum);
-
 int insertIntoParent(pagenum_t oldLeafPageNum, int64_t newKey, pagenum_t newLeafPageNum);
 int getIndexOfLeft(pagenum_t parentPageNum, pagenum_t leftChildPageNum);
 int insertIntoLeafAfterSplitting(pagenum_t leafPageNum, int64_t key, char* value);
+int insertIntoInternalAfterSplitting(pagenum_t parentPageNum, int leftIndex, int64_t newKey, pagenum_t rightChildPageNum);
 int db_insert(int64_t key, char *value);
 int db_find(int64_t key, char *ret_val);
 int db_delete(int64_t key);
