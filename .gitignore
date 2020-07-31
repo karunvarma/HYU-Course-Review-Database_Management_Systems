@@ -1,4 +1,5 @@
 database/**/*.o
+database/**/*.a
 database/**/main
 database/**/main.exe
 .vscode
