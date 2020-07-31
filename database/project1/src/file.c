@@ -5,10 +5,10 @@ int fd;
 // if file already exists, open : return 1 
 // if file doesn't exist, create: return 0
 int file_open_table(char *pathname) {
-    if ((fd = open(pathname,O_RDWR |O_CREAT |O_EXCL,0644)) > 0) {
+    if ((fd = open(pathname, O_RDWR | O_CREAT | O_EXCL | O_SYNC, 0644)) > 0) {
         return 0;
     } else {
-        fd = open(pathname, O_RDWR | O_APPEND);
+        fd = open(pathname, O_RDWR | O_SYNC);
         return 1;
     }
 
@@ -50,18 +50,12 @@ void file_free_page(pagenum_t pagenum);
 // Read an on-disk page into the in-memory page structure(dest)
 
 void file_read_page(pagenum_t pagenum, page_t *dest) {
-    if (pagenum == 8) {
-            printf("asdf");
-    }
     lseek(fd, pagenum * PAGESIZE, SEEK_SET);
     read(fd, dest, PAGESIZE);
     //TODO: check if filesize is smaller thand pagesize * pagenum
 }
 // Write an in-memory page(src) to the on-disk page
 void file_write_page(pagenum_t pagenum, const page_t *src) {
-    if (pagenum == 8) {
-        printf("asdf");
-    }
     lseek(fd, pagenum * PAGESIZE, SEEK_SET);
     write(fd, src, PAGESIZE);
 }
