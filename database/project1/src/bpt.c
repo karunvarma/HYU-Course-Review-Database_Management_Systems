@@ -1,7 +1,22 @@
 #include "bpt.h"
 // GLOBALS.
+extern int fd;
+uint64_t numOfTables = 0;
 
-int open_table(char *pathname);
+int open_table(char *pathname) {
+    if (file_open_table(pathname) == 0) { //not exist
+        //init table
+        page_t* header = (page_t*)malloc(sizeof(struct page_t));
+        ((headerPage_t*)header) -> rootPageNum = 0;
+        ((headerPage_t*)header) -> numOfPages = 1;
+        ((headerPage_t*)header) -> freePageNum = 0;
+        file_write_page(HEADERPAGENUM, header);
+        free(header);
+    }
+    numOfTables++;
+    return numOfTables;
+} 
+
 int startNewTree(int64_t key, char* value) {
     page_t* page = (page_t*)malloc(sizeof(struct page_t));
     page_t* headerPage = (page_t*)malloc(sizeof(struct page_t));

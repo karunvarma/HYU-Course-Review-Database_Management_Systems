@@ -63,6 +63,10 @@ typedef struct leafPage_t {
 typedef struct page_t {
     char reserved[PAGESIZE];
 } page_t;
+
+// if file already exists, open : return 1 
+// if file doesn't exist, create: return 0
+int file_open_table(char *pathname);
 // Allocate an on-disk page from the free page list
 pagenum_t file_alloc_page();
 // Free an on-disk page to the free page list

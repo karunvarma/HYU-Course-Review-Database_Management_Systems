@@ -5,7 +5,8 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-int fd;
+extern int fd;
+
 void printHeader(page_t* headerPage) {
     printf("HeaderPage\n");
     printf("freePageNum: %llu\nnumOfPages: %llu\nrootPageNum: %llu\n",
@@ -61,19 +62,8 @@ void printDb() {
 // MAIN
 int main( int argc, char ** argv ) {
 
-    // init();
-    if ((fd = open("db",O_RDWR |O_CREAT |O_EXCL,0644)) > 0) { //not exist
-        headerPage_t* header = (headerPage_t*)malloc(sizeof(struct headerPage_t));
-        header -> rootPageNum = 0;
-        header -> numOfPages = 1;
-        header -> freePageNum = 0;
-        lseek(fd, 0 , SEEK_SET);
-        write(fd, header, PAGESIZE);
-        free(header);
-    } else { //exist 
-        fd = open("db", O_RDWR | O_APPEND);
+    int ret = open_table("db");
 
-    }
     tests();
     int input_key;
     char input_value[120];
@@ -88,7 +78,6 @@ int main( int argc, char ** argv ) {
             break;
         case 'q':
             close(fd);
-            remove("./db");
             while (getchar() != (int)'\n');
             return EXIT_SUCCESS;
             break;

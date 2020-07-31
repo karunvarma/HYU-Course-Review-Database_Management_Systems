@@ -1,8 +1,18 @@
 #include "file.h"
 #include <stdio.h>
 
-extern int fd;
+int fd;
+// if file already exists, open : return 1 
+// if file doesn't exist, create: return 0
+int file_open_table(char *pathname) {
+    if ((fd = open(pathname,O_RDWR |O_CREAT |O_EXCL,0644)) > 0) {
+        return 0;
+    } else {
+        fd = open(pathname, O_RDWR | O_APPEND);
+        return 1;
+    }
 
+}
 
 // Allocate an on-disk page from the free page list
 pagenum_t file_alloc_page() {
