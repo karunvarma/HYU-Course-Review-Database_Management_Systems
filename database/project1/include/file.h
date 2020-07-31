@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 // disable byte padding
-#pragma pack(1)
+#pragma pack(push, 1)
 
 #define PAGESIZE 4096
 typedef uint64_t pagenum_t;
@@ -73,4 +73,5 @@ void file_read_page(pagenum_t pagenum, page_t *dest);
 void file_write_page(pagenum_t pagenum, const page_t *src);
 
 
+#pragma pack(pop)
 #endif /* __FILE_H_*/

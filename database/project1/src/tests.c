@@ -14,7 +14,7 @@ void headerPageTest() {
     page_t* page = (page_t*) malloc(sizeof(struct page_t));
     lseek(fd,0, SEEK_SET);
     read(fd, page, PAGESIZE);
-    printf("headerpage rootpagenum : %d\n", ((headerPage_t*)page) -> rootPageNum );
+    printf("headerpage rootpagenum : %llu\n", ((headerPage_t*)page) -> rootPageNum );
 
     free(page);
 

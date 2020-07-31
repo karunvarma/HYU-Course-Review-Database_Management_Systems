@@ -1,9 +1,7 @@
 #include "bpt.h"
 // GLOBALS.
 
-int open_table(char *pathname) {
-   
-}
+int open_table(char *pathname);
 int startNewTree(int64_t key, char* value) {
     page_t* page = (page_t*)malloc(sizeof(struct page_t));
     page_t* headerPage = (page_t*)malloc(sizeof(struct page_t));
@@ -354,9 +352,7 @@ int db_find(int64_t key, char * ret_val) {
         return SUCCESS; // success
     }
 }
-int db_delete(int64_t key) {
-
-}
+int db_delete(int64_t key);
 
 
 pagenum_t findLeaf(int64_t key) {
