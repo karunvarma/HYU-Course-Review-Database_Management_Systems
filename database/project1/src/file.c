@@ -7,6 +7,7 @@ extern int fd;
 pagenum_t file_alloc_page() {
     pagenum_t freePageNum, prevFreePageNum;
     uint64_t numOfPages;
+    char alloc[PAGESIZE] = {0,};
 
     lseek(fd, 0, SEEK_SET);
     read(fd, &freePageNum, sizeof(pagenum_t));
@@ -19,6 +20,8 @@ pagenum_t file_alloc_page() {
 
         lseek(fd, 16, SEEK_SET);
         write(fd, &numOfPages, sizeof(pagenum_t));
+        lseek(fd, freePageNum * PAGESIZE, SEEK_SET);
+        write(fd, alloc, PAGESIZE);
         return freePageNum;
     }
     while (freePageNum != 0) {
@@ -36,12 +39,18 @@ void file_free_page(pagenum_t pagenum);
 // Read an on-disk page into the in-memory page structure(dest)
 
 void file_read_page(pagenum_t pagenum, page_t *dest) {
+    if (pagenum == 8) {
+            printf("asdf");
+    }
     lseek(fd, pagenum * PAGESIZE, SEEK_SET);
     read(fd, dest, PAGESIZE);
     //TODO: check if filesize is smaller thand pagesize * pagenum
 }
 // Write an in-memory page(src) to the on-disk page
 void file_write_page(pagenum_t pagenum, const page_t *src) {
+    if (pagenum == 8) {
+        printf("asdf");
+    }
     lseek(fd, pagenum * PAGESIZE, SEEK_SET);
     write(fd, src, PAGESIZE);
 }

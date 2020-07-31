@@ -38,6 +38,10 @@ void printDb() {
     pageNum++;
     uint64_t numofpages = ((headerPage_t*)page) -> numOfPages;
     while (pageNum < numofpages) {
+        if(pageNum==8) {
+            pageNum++;
+            continue;
+        }
         file_read_page(pageNum, page);
         if (((internalPage_t*)page) -> isLeaf) {
             printf("pageNum: %d\n", pageNum);
