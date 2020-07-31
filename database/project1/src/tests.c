@@ -1,6 +1,6 @@
 #include "tests.h"
 #include "file.h"
-#include "bpt.h"
+#include "index.h"
 extern int fd;
 
 void pageSizeTest() {

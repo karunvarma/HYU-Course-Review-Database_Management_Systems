@@ -1,4 +1,4 @@
-#include "bpt.h"
+#include "index.h"
 #include "file.h"
 #include "tests.h"
 #include <unistd.h>
@@ -62,7 +62,7 @@ void printDb() {
 // MAIN
 int main( int argc, char ** argv ) {
 
-    int ret = open_table("db");
+    open_table("db");
 
     tests();
     int input_key;
@@ -90,8 +90,6 @@ int main( int argc, char ** argv ) {
         printf("======================================================================\n");
         printf("> ");
     }
-    printf("\n");
     close(fd);
-    remove("./db");
     return EXIT_SUCCESS;
 }

@@ -1,8 +1,9 @@
-#include "bpt.h"
+#include "index.h"
 // GLOBALS.
-extern int fd;
 uint64_t numOfTables = 0;
 
+// return execution number of open_table
+// open first table: return 1 
 int open_table(char *pathname) {
     if (file_open_table(pathname) == 0) { //not exist
         //init table
