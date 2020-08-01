@@ -8,6 +8,7 @@
 #pragma pack(push, 1)
 
 #define PAGESIZE 4096
+#define HEADERPAGENUM 0
 typedef uint64_t pagenum_t;
 
 typedef struct leafRecord_t {
