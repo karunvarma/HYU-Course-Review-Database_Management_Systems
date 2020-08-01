@@ -221,8 +221,10 @@ int main( int argc, char ** argv ) {
 
     srand(time(NULL));
 
+    //test constants
     testNum = 1000;
-    int keyRange = 1000;
+    int keyRange = testNum * 100;
+
     testInput.keys = (int*)malloc(sizeof(int) * testNum);
     testInputted.keys = (int*)malloc(sizeof(int) * testNum);
     testInput.numOfKeys = 0;
