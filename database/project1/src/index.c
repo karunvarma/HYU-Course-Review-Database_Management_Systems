@@ -20,7 +20,8 @@ int open_table(char *pathname) {
 
 int startNewTree(int64_t key, char* value) {
     page_t* page = (page_t*)malloc(sizeof(struct page_t));
-    page_t* headerPage = (page_t*)malloc(sizeof(struct page_t));
+    page_t* header = (page_t*)malloc(sizeof(struct page_t));
+    pagenum_t pageNum;
 
     ((leafPage_t*)page) -> parentPageNum = 0;
     ((leafPage_t*)page) -> isLeaf = 1;
@@ -28,16 +29,13 @@ int startNewTree(int64_t key, char* value) {
     ((leafPage_t*)page) -> rightSiblingPageNum = 0;
     ((leafPage_t*)page) -> record[0].key = key;
     strcpy(((leafPage_t*)page) -> record[0].value, value);
-    //update headerpage
-    file_read_page(HEADERPAGENUM, headerPage);
-    (((headerPage_t*)headerPage) -> numOfPages)++;
-    ((headerPage_t*)headerPage) -> rootPageNum = file_alloc_page();
-
-    file_write_page(HEADERPAGENUM, headerPage);
-    file_write_page(((headerPage_t*)headerPage) -> rootPageNum, page);
+    pageNum = file_alloc_page();
+    file_read_page(HEADERPAGENUM, header);
+    ((headerPage_t*)header) -> rootPageNum = pageNum;
+    file_write_page(HEADERPAGENUM, header);
+    file_write_page(pageNum, page);
 
     free(page);
-    free(headerPage);
 
     return SUCCESS;
 }
@@ -260,7 +258,6 @@ int insertIntoLeafAfterSplitting(pagenum_t oldLeafPageNum, int64_t key, char* va
     while (insertionIndex < LEAF_ORDER - 1 && ((leafPage_t*)oldLeaf) -> record[insertionIndex].key < key) {
         insertionIndex++;
     }
-// ((leafPage_t*)oldLeaf) ->
     for (i = 0, j = 0; i < ((leafPage_t*)oldLeaf) -> numOfKeys; i++, j++) {
         if (j == insertionIndex) j++;
         temporaryRecord[j].key = ((leafPage_t*)oldLeaf) ->record[i].key;
@@ -368,7 +365,6 @@ int db_find(int64_t key, char * ret_val) {
         return SUCCESS; // success
     }
 }
-int db_delete(int64_t key);
 
 
 pagenum_t findLeaf(int64_t key) {
@@ -401,4 +397,311 @@ pagenum_t findLeaf(int64_t key) {
     }
     free(page);
     return leafPageNum;
+}
+
+// delete
+// Find the matching record and delete it if found.
+// If success, return 0. Otherwise, return non-zero value.
+int db_delete(int64_t key) {
+    pagenum_t leafPageNum;
+    char tmp[120];
+
+    if (db_find(key, tmp) == FAIL) {
+        printf("[ERROR]: no %lld in the tree\n", key);
+        printf("         db_delete(%lld) failed\n", key);
+        return FAIL;
+    } else {
+        leafPageNum = findLeaf(key);
+        return deleteEntry(leafPageNum, key);
+    }
+}
+
+int deleteEntry(pagenum_t pageNum, int64_t key) {
+
+    int neighborIndex, kPrimeIndex, kPrime, capacity;
+
+    pagenum_t neighborPageNum;
+
+    removeEntryFromPage(pageNum, key);
+
+    page_t* page = (page_t*)malloc(sizeof(struct page_t));
+    file_read_page(pageNum, page);
+    if (((internalPage_t*)page) -> parentPageNum == 0) {
+        free(page);
+        return adjustRoot(pageNum);
+    }
+
+    if (((internalPage_t*)page) -> numOfKeys > 0) {
+        free(page);
+        return SUCCESS;
+    }
+
+    neighborIndex = getNeighborIndex(pageNum);
+    kPrimeIndex = neighborIndex == -2 ? 0 : neighborIndex + 1;
+    page_t* parent = (page_t*)malloc(sizeof(struct page_t));
+    file_read_page(((internalPage_t*)page) -> parentPageNum, parent);
+    kPrime = ((internalPage_t*)parent) -> record[kPrimeIndex].key;
+    if (neighborIndex == - 2) {
+        neighborPageNum = ((internalPage_t*)parent) -> record[kPrimeIndex].pageNum;
+    } else if (kPrimeIndex == 0) {
+        neighborPageNum = ((internalPage_t*)parent) -> leftMostPageNum;
+    } else {
+        neighborPageNum = ((internalPage_t*)parent) -> record[kPrimeIndex - 1].pageNum;
+    }
+    page_t* neighbor = (page_t*)malloc(sizeof(struct page_t));
+    file_read_page(neighborPageNum, neighbor);
+    capacity = ((internalPage_t*)page) -> isLeaf ? LEAF_ORDER : INTERNAL_ORDER - 1;
+
+    if (((internalPage_t*)neighbor) -> numOfKeys + ((internalPage_t*)page) -> numOfKeys  < capacity) {
+        free(page);
+        free(parent);
+        free(neighbor);
+        return coalescePages(neighborPageNum, kPrime, pageNum, neighborIndex);
+    } else {
+        free(page);
+        free(parent);
+        free(neighbor);
+        return redistributePages(neighborPageNum, kPrime, pageNum, neighborIndex, kPrimeIndex);
+    } 
+
+    free(page);
+    free(parent);
+    return SUCCESS;
+}
+
+int redistributePages(pagenum_t neighborPageNum, int64_t kPrime, pagenum_t pageNum, int neighborIndex, int kPrimeIndex) {
+    // execute only when page is internal
+
+    int i;
+    page_t* child, * neighbor, * page, * parent;
+    pagenum_t childPageNum, parentPageNum;
+
+    neighbor = (page_t*)malloc(sizeof(struct page_t));
+    page = (page_t*)malloc(sizeof(struct page_t));
+    child = (page_t*)malloc(sizeof(struct page_t));
+    parent = (page_t*)malloc(sizeof(struct page_t));
+ 
+    file_read_page(neighborPageNum, neighbor);
+    file_read_page(pageNum, page);
+    // TODO: check  page's numkey == 0
+    if (((internalPage_t*)page) -> numOfKeys != 0) {
+        printf("something's wrong \n");
+        free(page);
+        free(neighbor);
+        free(child);
+        free(parent);
+        return FAIL;
+    }
+
+    // move one from neighbor to page 
+    if (neighborIndex == -2) {
+        // neighbor is right child, page is leftmostchild
+
+        ((internalPage_t*)page) -> record[((internalPage_t*)page) -> numOfKeys].key = kPrime;
+        ((internalPage_t*)page) -> record[((internalPage_t*)page) -> numOfKeys].pageNum = ((internalPage_t*)neighbor) -> leftMostPageNum;
+        ((internalPage_t*)neighbor) -> leftMostPageNum = ((internalPage_t*)neighbor) -> record[0].pageNum;
+        childPageNum = ((internalPage_t*)page) -> record[((internalPage_t*)page) -> numOfKeys].pageNum;
+        parentPageNum = ((internalPage_t*)page) -> parentPageNum;
+
+        file_read_page(childPageNum, child);
+        file_read_page(parentPageNum, parent);
+        ((internalPage_t*)child) -> parentPageNum = pageNum;
+        ((internalPage_t*)parent) -> record[kPrimeIndex].key = ((internalPage_t*)neighbor) -> record[0].key;
+        file_write_page(childPageNum, child);
+        file_write_page(parentPageNum, parent);
+        free(parent);
+        free(child);
+
+        for (i = 0; i < ((internalPage_t*)neighbor) -> numOfKeys; i++) {
+            ((internalPage_t*)neighbor) -> record[i].key = ((internalPage_t*)neighbor) -> record[i + 1].key;
+            ((internalPage_t*)neighbor) -> record[i].pageNum = ((internalPage_t*)neighbor) -> record[i + 1].pageNum;
+        }
+
+    } else {
+        // neighbor is leftChild, page is rightChild
+        
+        for(i = 0; i  < ((internalPage_t*)page) -> numOfKeys; i++) {
+            ((internalPage_t*)page) -> record[i + 1].key = ((internalPage_t*)page) -> record[i].key;
+            ((internalPage_t*)page) -> record[i + 1].pageNum = ((internalPage_t*)page) -> record[i].pageNum;
+        }
+        ((internalPage_t*)page) -> record[0].key = kPrime;
+        ((internalPage_t*)page) -> record[0].pageNum = ((internalPage_t*)page) -> leftMostPageNum;
+        ((internalPage_t*)page) -> leftMostPageNum = ((internalPage_t*)neighbor) -> record[((internalPage_t*)neighbor) -> numOfKeys - 1].pageNum;
+        childPageNum = ((internalPage_t*)page) -> leftMostPageNum;
+        parentPageNum = ((internalPage_t*)page) -> parentPageNum;
+
+        file_read_page(childPageNum, child);
+        file_read_page(parentPageNum, parent);
+        ((internalPage_t*)child) -> parentPageNum = pageNum;
+        ((internalPage_t*)parent) -> record[kPrimeIndex].key = ((internalPage_t*)neighbor) -> record[((internalPage_t*)neighbor) -> numOfKeys - 1].key;
+        file_write_page(childPageNum, child);
+        file_write_page(parentPageNum, parent);
+        free(parent);
+        free(child);
+    } 
+    (((internalPage_t*)page) -> numOfKeys)++;
+    (((internalPage_t*)neighbor) -> numOfKeys)--;
+    file_write_page(pageNum, page);
+    file_write_page(neighborPageNum, neighbor);
+    free(page);
+    free(neighbor);
+    return SUCCESS;
+}
+//move right keys to left
+int coalescePages(pagenum_t neighborPageNum , int64_t kPrime, pagenum_t pageNum, int neighborIndex) {
+    pagenum_t leftPageNum, rightPageNum, parentPageNum;
+    page_t* left = (page_t*)malloc(sizeof(struct page_t));
+    page_t* right = (page_t*)malloc(sizeof(struct page_t));
+    int leftInsertionIndex, rightNumOfKeys;
+    int i,j;
+
+
+    if (neighborIndex == -2) {
+        leftPageNum = pageNum;
+        rightPageNum = neighborPageNum; 
+    } else {
+        leftPageNum = neighborPageNum;
+        rightPageNum = pageNum;
+    }
+
+    file_read_page(leftPageNum, left);
+    file_read_page(rightPageNum, right);
+
+    leftInsertionIndex = ((internalPage_t*)left) -> numOfKeys;
+    rightNumOfKeys = ((internalPage_t*)right) -> numOfKeys;
+    if(((internalPage_t*)left) -> isLeaf) {
+        for (i = leftInsertionIndex, j = 0; j < rightNumOfKeys; i++, j++) {
+            ((leafPage_t*)left) ->  record[i].key = ((leafPage_t*)right) -> record[j].key;
+            strcpy(((leafPage_t*)left) -> record[i].value, ((leafPage_t*)right) -> record[j].value);
+            (((leafPage_t*)left) -> numOfKeys)++;
+            (((leafPage_t*)right) -> numOfKeys)--;
+        }
+        ((leafPage_t*)left) -> rightSiblingPageNum = ((leafPage_t*)right) -> rightSiblingPageNum;
+    } else {
+        ((internalPage_t*)left) -> record[leftInsertionIndex].key = kPrime;
+        ((internalPage_t*)left) -> record[leftInsertionIndex].pageNum = ((internalPage_t*)right) -> leftMostPageNum;
+        (((internalPage_t*)left) -> numOfKeys)++;
+
+
+        for (i = leftInsertionIndex + 1, j = 0; j < rightNumOfKeys; i++, j++) {
+            ((internalPage_t*)left) -> record[i].key = ((internalPage_t*)right) -> record[j].key;
+            ((internalPage_t*)left) -> record[i].pageNum = ((internalPage_t*)right) -> record[j].pageNum;
+            (((internalPage_t*)left) -> numOfKeys)++;
+            (((internalPage_t*)right) -> numOfKeys)--;
+        }
+
+        page_t* child = (page_t*)malloc(sizeof(struct page_t));
+
+        for (i = 0; i < ((internalPage_t*)left) -> numOfKeys; i++) {
+            file_read_page(((internalPage_t*)left) -> record[i].pageNum, child);
+            ((internalPage_t*)child) -> parentPageNum = leftPageNum;
+            file_write_page(((internalPage_t*)left) -> record[i].pageNum, child);
+        }
+        free(child);
+    }
+
+
+    parentPageNum = ((internalPage_t*)left) -> parentPageNum;
+    file_write_page(leftPageNum, left);
+    file_write_page(rightPageNum, right);
+    file_free_page(rightPageNum);
+    free(left);
+    free(right);
+    if (parentPageNum == 0) {
+        //should not come in here
+        return SUCCESS;
+    }
+    return deleteEntry(parentPageNum, kPrime);
+}
+
+// return pageNum's left one's index at parent,  if page is leftmost return - 2
+int getNeighborIndex(pagenum_t pageNum) {
+    pagenum_t parentPageNum;
+    page_t* parent = (page_t*)malloc(sizeof(struct page_t));
+    page_t* page = (page_t*)malloc(sizeof(struct page_t));
+    int i;
+
+    file_read_page(pageNum, page);
+    parentPageNum = ((internalPage_t*)page) -> parentPageNum;
+    file_read_page(parentPageNum, parent);
+
+    if (((internalPage_t*)parent) -> leftMostPageNum == pageNum) {
+        free(parent);
+        free(page);
+        return -2;
+    }
+
+    for (i = 0; i < ((internalPage_t*)parent) -> numOfKeys; i++) {
+        if (((internalPage_t*)parent) -> record[i].pageNum == pageNum) {
+            free(parent);
+            free(page);
+            return i - 1;
+        }
+    }
+
+
+
+    printf("[ERROR]: getNeighborIndex fail");
+    free(parent);
+    free(page);
+    return -2;
+
+}
+void removeEntryFromPage(pagenum_t pageNum, int64_t key) {
+    int i;
+    i = 0;
+
+    page_t* page = (page_t*)malloc(sizeof(struct page_t));
+    file_read_page(pageNum, page);
+    if (((internalPage_t*)page) -> isLeaf) {
+        while (((leafPage_t*)page) -> record[i].key != key) {
+            i++;
+        }
+        for (++i; i < ((leafPage_t*)page) -> numOfKeys; i++) {
+            ((leafPage_t*)page) -> record[i - 1].key = ((leafPage_t*)page) -> record[i].key;
+            strcpy(((leafPage_t*)page) -> record[i - 1].value, ((leafPage_t*)page) -> record[i].value);
+        }
+    } else {
+        while (((internalPage_t*)page) -> record[i].key != key) {
+            i++;
+        }
+        for (++i; i < ((internalPage_t*)page) -> numOfKeys; i++) {
+            ((internalPage_t*)page) -> record[i - 1].key = ((internalPage_t*)page) -> record[i].key;
+            ((internalPage_t*)page) -> record[i - 1].pageNum = ((internalPage_t*)page) -> record[i].pageNum;
+        }
+    }
+    (((internalPage_t*)page) -> numOfKeys)--;
+    file_write_page(pageNum, page);
+    free(page);
+}
+
+int adjustRoot(pagenum_t pageNum) {
+    page_t* page = (page_t*)malloc(sizeof(struct page_t));
+    file_read_page(pageNum, page);
+
+    if (((internalPage_t*)page) -> numOfKeys > 0) {
+        return SUCCESS;
+    }
+    page_t* header = (page_t*)malloc(sizeof(struct page_t));
+    file_read_page(HEADERPAGENUM, header);
+
+    if (((internalPage_t*)page) -> isLeaf) {
+        ((headerPage_t*)header) -> rootPageNum = 0;
+        file_write_page(HEADERPAGENUM, header);
+        file_free_page(pageNum);
+        return SUCCESS;
+    } else {
+        ((headerPage_t*)header) -> rootPageNum = ((internalPage_t*)page) -> leftMostPageNum;
+        ((internalPage_t*)page) -> parentPageNum = 0;
+        page_t* child = (page_t*)malloc(sizeof(struct page_t));
+        pagenum_t childPageNum = ((internalPage_t*)page) -> leftMostPageNum;
+        file_read_page(childPageNum, child);
+        ((internalPage_t*)child) -> parentPageNum = 0;
+        file_write_page(childPageNum, child); 
+        file_write_page(HEADERPAGENUM, header);
+        file_write_page(pageNum, page);
+        file_free_page(pageNum);
+
+        return SUCCESS;
+    }
 }

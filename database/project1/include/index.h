@@ -13,7 +13,7 @@
 #define false 0
 #define true 1
 #endif
-#define HEADERPAGENUM 0
+
 #define SUCCESS 0
 #define FAIL -1
 // #define LEAF_ORDER 31
@@ -40,6 +40,13 @@ int insertIntoInternalAfterSplitting(pagenum_t parentPageNum, int leftIndex, int
 int db_insert(int64_t key, char *value);
 int db_find(int64_t key, char *ret_val);
 int db_delete(int64_t key);
+//delete entry from internal or leaf
+int deleteEntry(pagenum_t pageNum, int64_t key);
+int getNeighborIndex(pagenum_t pageNum);
+void removeEntryFromPage(pagenum_t pageNum, int64_t key);
+int adjustRoot(pagenum_t pageNum);
+int coalescePages(pagenum_t neighborPageNum , int64_t kPrime, pagenum_t pageNum, int neighborIndex);
+int redistributePages(pagenum_t neighborPageNum, int64_t kPrime, pagenum_t pageNum, int neighborIndex, int kPrimeIndex);
 pagenum_t findLeaf(int64_t key);
 
 #endif /* __BPT_H__*/
