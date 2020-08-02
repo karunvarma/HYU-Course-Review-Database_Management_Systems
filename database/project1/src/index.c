@@ -70,69 +70,71 @@ int cut( int length ) {
         return length/2 + 1;
 }
 
-int insertIntoNewRoot(pagenum_t oldLeafPageNum, int64_t newKey, pagenum_t newLeafPageNum) {
+// make root that has left leaf as leftmost child, right leaf as first child
+int insertIntoNewRoot(pagenum_t leftLeafPageNum, int64_t newKey, pagenum_t rightLeafPageNum) {
     page_t* root = (page_t*)malloc(sizeof(struct page_t));
-    page_t* oldLeaf = (page_t*)malloc(sizeof(struct page_t));
-    page_t* newLeaf = (page_t*)malloc(sizeof(struct page_t));
+    page_t* leftLeaf = (page_t*)malloc(sizeof(struct page_t));
+    page_t* rightLeaf = (page_t*)malloc(sizeof(struct page_t));
     page_t* header = (page_t*)malloc(sizeof(struct page_t));
     pagenum_t rootPageNum;
 
     rootPageNum = file_alloc_page();
     file_read_page(HEADERPAGENUM, header);
-    file_read_page(oldLeafPageNum, oldLeaf);
-    file_read_page(newLeafPageNum, newLeaf);
+    file_read_page(leftLeafPageNum, leftLeaf);
+    file_read_page(rightLeafPageNum, rightLeaf);
 
     ((headerPage_t*)header) -> rootPageNum = rootPageNum;
     ((internalPage_t*)root) -> parentPageNum = HEADERPAGENUM;
     ((internalPage_t*)root) -> isLeaf = 0;
     ((internalPage_t*)root) -> numOfKeys = 0;
     (((internalPage_t*)root) -> numOfKeys)++;
-    ((internalPage_t*)root) -> leftMostPageNum = oldLeafPageNum;
+    ((internalPage_t*)root) -> leftMostPageNum = leftLeafPageNum;
     ((internalPage_t*)root) -> record[0].key = newKey;
-    ((internalPage_t*)root) -> record[0].pageNum = newLeafPageNum;
-    ((leafPage_t*)oldLeaf) -> parentPageNum = rootPageNum;
-    ((leafPage_t*)newLeaf) -> parentPageNum = rootPageNum;
+    ((internalPage_t*)root) -> record[0].pageNum = rightLeafPageNum;
+    ((leafPage_t*)leftLeaf) -> parentPageNum = rootPageNum;
+    ((leafPage_t*)rightLeaf) -> parentPageNum = rootPageNum;
 
     file_write_page(HEADERPAGENUM, header);
-    file_write_page(oldLeafPageNum, oldLeaf);
-    file_write_page(newLeafPageNum, newLeaf);
+    file_write_page(leftLeafPageNum, leftLeaf);
+    file_write_page(rightLeafPageNum, rightLeaf);
     file_write_page(rootPageNum, root);
 
     free(header);
     free(root);
-    free(oldLeaf);
-    free(newLeaf);
+    free(leftLeaf);
+    free(rightLeaf);
     return SUCCESS;
 }
 
-//if leftchild is the leftmost child , return -1
-int getIndexOfLeft(pagenum_t parentPageNum, pagenum_t leftChildPageNum) {
-    int IndexOfLeftChild = 0;
+// find index of child
+// if child is left most page , return - 1
+int getIndexOfLeft(pagenum_t parentPageNum, pagenum_t childPageNum) {
+    int indexOfLeftChild = 0;
     page_t* parent = (page_t*)malloc(sizeof(struct page_t));
     file_read_page(parentPageNum, parent);
 
-    if (((internalPage_t*)parent) -> leftMostPageNum == leftChildPageNum) {
+    if (((internalPage_t*)parent) -> leftMostPageNum == childPageNum) {
         free(parent);
         return -1;
     }
-    while (IndexOfLeftChild <= ((internalPage_t*)parent) -> numOfKeys 
-           && ((internalPage_t*)parent) -> record[IndexOfLeftChild].pageNum != leftChildPageNum) {
-               IndexOfLeftChild++;
+    while (indexOfLeftChild <= ((internalPage_t*)parent) -> numOfKeys 
+           && ((internalPage_t*)parent) -> record[indexOfLeftChild].pageNum != childPageNum) {
+               indexOfLeftChild++;
            }
     free(parent);
-    return IndexOfLeftChild;
+    return indexOfLeftChild;
 }
-int insertIntoInternal(pagenum_t parentPageNum, int leftIndex, int64_t newKey, pagenum_t newLeafPageNum) {
+int insertIntoInternal(pagenum_t parentPageNum, int leftChildIndex, int64_t newKey, pagenum_t rightChildPageNum) {
     int i;
     page_t* parent = (page_t*)malloc(sizeof(struct page_t));
     file_read_page(parentPageNum, parent);
     
-    for (i = (((internalPage_t*)parent) -> numOfKeys) - 1; i > leftIndex; i--) {
+    for (i = (((internalPage_t*)parent) -> numOfKeys) - 1; i > leftChildIndex; i--) {
         ((internalPage_t*)parent) -> record[i + 1].key = ((internalPage_t*)parent) -> record[i].key;
         ((internalPage_t*)parent) -> record[i + 1].pageNum = ((internalPage_t*)parent) -> record[i].pageNum; 
     }
-    ((internalPage_t*)parent) -> record[leftIndex + 1].key = newKey;
-    ((internalPage_t*)parent) -> record[leftIndex + 1].pageNum = newLeafPageNum;
+    ((internalPage_t*)parent) -> record[leftChildIndex + 1].key = newKey;
+    ((internalPage_t*)parent) -> record[leftChildIndex + 1].pageNum = rightChildPageNum;
     (((internalPage_t*)parent) -> numOfKeys)++;
     file_write_page(parentPageNum, parent);
     free(parent);
@@ -140,7 +142,7 @@ int insertIntoInternal(pagenum_t parentPageNum, int leftIndex, int64_t newKey, p
 }
 
 //insert new key to parent, parent need to be splitted to parent and rightparent
-int insertIntoInternalAfterSplitting(pagenum_t parentPageNum, int leftIndex, int64_t newKey, pagenum_t rightChildPageNum) {
+int insertIntoInternalAfterSplitting(pagenum_t parentPageNum, int leftChildIndex, int64_t newKey, pagenum_t rightChildPageNum) {
     internalRecord_t* temporaryRecord;
     page_t* parent, * rightParent;
     pagenum_t rightParentPageNum;
@@ -154,13 +156,13 @@ int insertIntoInternalAfterSplitting(pagenum_t parentPageNum, int leftIndex, int
     rightParentPageNum = file_alloc_page();
     file_read_page(parentPageNum, parent);
     for(i = 0, j = 0; i < ((internalPage_t*)parent) -> numOfKeys; i++, j++) {
-        if (j == leftIndex + 1) j++;
+        if (j == leftChildIndex + 1) j++;
         temporaryRecord[j].key = ((internalPage_t*)parent) -> record[i].key;
         temporaryRecord[j].pageNum = ((internalPage_t*)parent) -> record[i].pageNum;
     }
 
-    temporaryRecord[leftIndex + 1].key = newKey;
-    temporaryRecord[leftIndex + 1].pageNum =  rightChildPageNum;
+    temporaryRecord[leftChildIndex + 1].key = newKey;
+    temporaryRecord[leftChildIndex + 1].pageNum =  rightChildPageNum;
 
     split = cut(INTERNAL_ORDER);
     ((internalPage_t*)parent) -> numOfKeys = 0;
@@ -207,30 +209,30 @@ int insertIntoInternalAfterSplitting(pagenum_t parentPageNum, int leftIndex, int
 
 
 }
-int insertIntoParent(pagenum_t oldLeafPageNum, int64_t newKey, pagenum_t newLeafPageNum) {
+int insertIntoParent(pagenum_t leftChildPageNum, int64_t newKey, pagenum_t rightChildPageNum) {
 
     int leftIndex;
-    page_t* oldLeaf, * parent;
+    page_t* leftChild, * parent;
     pagenum_t parentPageNum;
-    oldLeaf = (page_t*)malloc(sizeof(struct page_t));
-    file_read_page(oldLeafPageNum, oldLeaf);
-    parentPageNum = ((leafPage_t*)oldLeaf) -> parentPageNum;
-    free(oldLeaf);
-    //oldLeaf was rootPage
+    leftChild = (page_t*)malloc(sizeof(struct page_t));
+    file_read_page(leftChildPageNum, leftChild);
+    parentPageNum = ((leafPage_t*)leftChild) -> parentPageNum;
+    free(leftChild);
+    //leftChild was rootPage
     if (parentPageNum == HEADERPAGENUM) {
-        return insertIntoNewRoot(oldLeafPageNum, newKey, newLeafPageNum);
+        return insertIntoNewRoot(leftChildPageNum, newKey, rightChildPageNum);
     }
-    leftIndex = getIndexOfLeft(parentPageNum, oldLeafPageNum);
+    leftIndex = getIndexOfLeft(parentPageNum, leftChildPageNum);
 
     parent = (page_t*)malloc(sizeof(struct page_t));
     file_read_page(parentPageNum, parent);
     if (((internalPage_t*)parent) -> numOfKeys < INTERNAL_ORDER - 1) {
         free(parent);
-        return insertIntoInternal(parentPageNum, leftIndex, newKey, newLeafPageNum);
+        return insertIntoInternal(parentPageNum, leftIndex, newKey, rightChildPageNum);
     }
     
     free(parent);
-    return insertIntoInternalAfterSplitting(parentPageNum, leftIndex, newKey, newLeafPageNum);
+    return insertIntoInternalAfterSplitting(parentPageNum, leftIndex, newKey, rightChildPageNum);
 
     return SUCCESS;
 
@@ -644,7 +646,7 @@ int getNeighborIndex(pagenum_t pageNum) {
     printf("[ERROR]: getNeighborIndex fail");
     free(parent);
     free(page);
-    return -2;
+    return -3;
 
 }
 void removeEntryFromPage(pagenum_t pageNum, int64_t key) {
