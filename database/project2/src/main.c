@@ -49,7 +49,7 @@ int main( int argc, char ** argv ) {
     srand(time(NULL));
 
     //test constants
-    testNum = 1000;
+    testNum = 500;
     int keyRange = testNum * 100;
 
     testInput.keys = (int*)malloc(sizeof(int) * testNum);
