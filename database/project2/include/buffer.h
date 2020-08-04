@@ -5,10 +5,12 @@
 #include <fcntl.h>
 
 typedef struct bufferPage_t {
-    page_t page
-    uint64_t 
+    page_t page;
+    uint64_t tableId;
     pagenum_t pageNum;
-    is
+    int isDirty;
+    int isPinned;
+    bufferPage_t* next;
 } bufferPage_t;
 
 
