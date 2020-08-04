@@ -26,12 +26,13 @@ typedef struct bufferPage_t {
 
 int bufferOpenTable(char* pathname);
 
-int bufferWritePage(int tableid, pagenum_t pageNum);
+void bufferWritePage(int tableid, pagenum_t pageNum);
 page_t* bufferRequestPage(int tableId, pagenum_t pageNum);
 
 
 int getFdOfTable(int tableId);
-// get index of buffer page that is victim of replace
-int getIndexOfVictim();
 void updateToMostRecent(bufferPage_t* bufferPage);
+
+int bufferInitDb(int bufNum);
+int bufferCloseTable(int table_id);
 #endif /* __BUFFER_H_*/

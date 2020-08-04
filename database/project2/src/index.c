@@ -697,3 +697,17 @@ int adjustRoot(pagenum_t pageNum) {
         return SUCCESS;
     }
 }
+
+
+
+int init_db(int buf_num) {
+    return bufferInitDb(buf_num);
+}
+
+int close_table(int table_id) {
+    return bufferCloseTable(table_id);
+}
+
+int shutdown_db() {
+
+}

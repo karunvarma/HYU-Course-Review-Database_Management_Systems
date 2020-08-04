@@ -27,7 +27,7 @@ int bufferOpenTable(char* pathname) {
 }
 
 
-int init_db(int bufNum) {
+int bufferInitDb(int bufNum) {
     numOfBuffer = bufNum;
     if (numOfBuffer == 0) {
         return -1;
@@ -55,7 +55,7 @@ int init_db(int bufNum) {
     return 0;
 }
 
-int close_table(int table_id) {
+int bufferCloseTable(int table_id) {
     if (numOfBuffer == 0 || bufferPool == NULL) { 
         printf("error\n");
         return -1;
@@ -146,6 +146,11 @@ int getFdOfTable(int tableId) {
     return -1;
 }
 
-int getIndexOfVictim() {
+ void bufferWritePage(int tableid, pagenum_t pageNum) {
+     //find page 
 
-}
+
+     // page exist
+
+     //page not exist , 
+ }
