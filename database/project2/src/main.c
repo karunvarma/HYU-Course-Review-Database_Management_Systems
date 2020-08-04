@@ -34,13 +34,54 @@ void listRemoveKey(list* list, int key);
 int listGetRandomKey(list* list);
 int listIsKeyExist(list* list, int key);
 
+void test();
+
 // MAIN
 int main( int argc, char ** argv ) {
 
     open_table("db");
     tests();
 
-    //for test
+    
+
+    int input_key;
+    char input_value[120];
+    char instruction;
+    printf("> ");
+    while (scanf("%c", &instruction) != EOF) {
+        switch (instruction) {
+        case 'i':
+            scanf("%d",&input_key);
+            scanf("%s",input_value);
+            db_insert(input_key, input_value);
+            break;
+        case 'd':
+            scanf("%d",&input_key);
+            db_delete(input_key);
+            break;
+        case 'q':
+            close(fd);
+            while (getchar() != (int)'\n');
+            return EXIT_SUCCESS;
+            break;
+
+        default:
+            break;
+        }
+        while (getchar() != (int)'\n');
+        printDb();
+        printTree();
+        printf("======================================================================\n");
+        printf("> ");
+    }
+    close(fd);
+    return EXIT_SUCCESS;
+}
+
+
+
+void test() {
+//for test
     list testInput;
     list testInputted;
     
@@ -114,39 +155,6 @@ int main( int argc, char ** argv ) {
     free(testInputted.keys);
 
     //test end
-
-    int input_key;
-    char input_value[120];
-    char instruction;
-    printf("> ");
-    while (scanf("%c", &instruction) != EOF) {
-        switch (instruction) {
-        case 'i':
-            scanf("%d",&input_key);
-            scanf("%s",input_value);
-            db_insert(input_key, input_value);
-            break;
-        case 'd':
-            scanf("%d",&input_key);
-            db_delete(input_key);
-            break;
-        case 'q':
-            close(fd);
-            while (getchar() != (int)'\n');
-            return EXIT_SUCCESS;
-            break;
-
-        default:
-            break;
-        }
-        while (getchar() != (int)'\n');
-        printDb();
-        printTree();
-        printf("======================================================================\n");
-        printf("> ");
-    }
-    close(fd);
-    return EXIT_SUCCESS;
 }
 
 void printFreePageList(){
