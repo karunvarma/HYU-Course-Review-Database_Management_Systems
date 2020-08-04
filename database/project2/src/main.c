@@ -64,7 +64,10 @@ int main( int argc, char ** argv ) {
             while (getchar() != (int)'\n');
             return EXIT_SUCCESS;
             break;
-
+        case 'o':
+            scanf("%s",input_value);
+            printf("open %s, tableId: %d\n", open_table(input_value));
+            break;
         default:
             break;
         }

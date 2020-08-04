@@ -51,4 +51,16 @@ int adjustRoot(pagenum_t pageNum);
 int coalescePages(pagenum_t neighborPageNum , int64_t kPrime, pagenum_t pageNum, int neighborIndex);
 int redistributePages(pagenum_t neighborPageNum, int64_t kPrime, pagenum_t pageNum, int neighborIndex, int kPrimeIndex);
 
+/* 
+Allocate the buffer pool (array) with the given number of entries. 
+• Initialize other fields (state info, LRU info..) with your own design.
+• If success, return 0. Otherwise, return non-zero value.
+*/
+int init_db (int buf_num);
+/*
+ • Write all pages of this table from buffer to disk and discard the table id. 
+ • If success, return 0. Otherwise, return non-zero value.
+*/
+int close_table(int table_id);
+
 #endif /* __BPT_H__*/

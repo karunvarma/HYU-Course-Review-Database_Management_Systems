@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 int fd;
+
 // if file already exists, open : return 1 
 // if file doesn't exist, create: return 0
 int file_open_table(char *pathname) {

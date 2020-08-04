@@ -1,21 +1,11 @@
 #include "index.h"
-// GLOBALS.
-int numOfTables = 0;
+#include "buffer.h"
+
 
 // return execution number of open_table
 // open first table: return 1 
 int open_table(char *pathname) {
-    if (file_open_table(pathname) == 0) { //not exist
-        //init table
-        page_t* header = (page_t*)malloc(sizeof(struct page_t));
-        ((headerPage_t*)header) -> rootPageNum = 0;
-        ((headerPage_t*)header) -> numOfPages = 1;
-        ((headerPage_t*)header) -> freePageNum = 0;
-        file_write_page(HEADERPAGENUM, header);
-        free(header);
-    }
-    numOfTables++;
-    return numOfTables;
+    return bufferOpenTable(pathname);
 } 
 
 int startNewTree(int64_t key, char* value) {

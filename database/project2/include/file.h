@@ -9,6 +9,9 @@
 
 #define PAGESIZE 4096
 #define HEADERPAGENUM 0
+
+extern int fd;
+
 typedef uint64_t pagenum_t;
 
 typedef struct leafRecord_t {
