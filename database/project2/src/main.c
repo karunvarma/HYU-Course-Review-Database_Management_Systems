@@ -1,12 +1,17 @@
 #include "index.h"
 #include "file.h"
 #include "tests.h"
+#include "buffer.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <time.h>
 
 extern int fd;
+extern int numOfBuffer;
+extern int numOfTables;
+extern bufferPage_t* bufferPool;
+extern table* tables;
 
 typedef struct pageNode {
     pagenum_t pageNum;
@@ -36,14 +41,19 @@ int listIsKeyExist(list* list, int key);
 
 void test();
 
+void printBufferPool();
+void printTables();
+
+
 // MAIN
 int main( int argc, char ** argv ) {
 
     open_table("db");
+    init_db(5);
     tests();
     // test();
     
-
+    int inputTableId;
     int input_key;
     char input_value[120];
     char instruction;
@@ -51,22 +61,31 @@ int main( int argc, char ** argv ) {
     while (scanf("%c", &instruction) != EOF) {
         switch (instruction) {
         case 'i':
+            scanf("%d", &inputTableId);
             scanf("%d",&input_key);
             scanf("%s",input_value);
-            db_insert(input_key, input_value);
+            db_insert(inputTableId, input_key, input_value);
             break;
         case 'd':
+            scanf("%d", &inputTableId);
             scanf("%d",&input_key);
-            db_delete(input_key);
+            db_delete(inputTableId, input_key);
             break;
         case 'q':
-            close(fd);
+            shutdown_db();
             while (getchar() != (int)'\n');
             return EXIT_SUCCESS;
             break;
         case 'o':
             scanf("%s",input_value);
-            printf("open %s, tableId: %d\n", open_table(input_value));
+            printf("open %s, tableId: %d\n", input_value, open_table(input_value));
+            break;
+        case 'f':
+            char retval[120];
+            scanf("%d", &inputTableId);
+            scanf("%d", &input_key);
+            db_find(inputTableId, input_key, retval);
+            printf("retval: %s\n", retval);
             break;
         default:
             break;
@@ -74,10 +93,12 @@ int main( int argc, char ** argv ) {
         while (getchar() != (int)'\n');
         printDb();
         printTree();
+        printTables();
+        printBufferPool();
         printf("======================================================================\n");
         printf("> ");
     }
-    close(fd);
+    shutdown_db();
     return EXIT_SUCCESS;
 }
 
@@ -243,12 +264,13 @@ void printTree() {
     page_t header;
     file_read_page(HEADERPAGENUM, &header);
     pagenum_t rootPageNum = ((headerPage_t*)&header) ->rootPageNum;
-    printf("=======================================PRINTTREE=======================================\n");
+    printf("=======================================PRINTTREESTART=======================================\n");
     pageNode root = {.pageNum = rootPageNum, .next = NULL};
 
     printHeader(HEADERPAGENUM);
     if (rootPageNum == 0) {
         printf("Empty tree.\n");
+        printf("=======================================PRINTTREEEND=======================================\n");
         return;
     }
     queue = NULL;
@@ -345,4 +367,35 @@ int listIsKeyExist(list* list, int key) {
         }
     }
     return FAIL;
+}
+
+
+void printBufferPool() {
+    printf("******************printBufferPoolStart******************\n");
+
+    for (int i = 0; i < numOfBuffer; i++) {
+        printf("----------------------------------\n");
+        printf("bufferPool[%d]\n", i);
+        printf("tableId: %d\n", bufferPool[i].tableId);
+        printf("pageNum: %llu\n", bufferPool[i].pageNum);
+        printf("isDirty: %d\n", bufferPool[i].isDirty);
+        printf("isPinned: %d\n", bufferPool[i].isPinned);
+        printf("----------------------------------\n");
+    }
+    printf("******************printBufferPoolEnd******************\n");
+}
+
+void printTables() {
+    printf("@@@@@@@@@@@@@@@@@@@printTablesStart@@@@@@@@@@@@@@@@@@@\n");
+
+    for (int i = 0; i < numOfTables; i++) {
+        printf("----------------------------------\n");
+        printf("tables[%d]\n", i);
+        printf("tableId: %d\n", tables[i].tableId);
+        printf("fd: %d\n", tables[i].fd);
+        printf("----------------------------------\n");
+
+    }
+
+    printf("@@@@@@@@@@@@@@@@@@@printTablesEnd@@@@@@@@@@@@@@@@@@@\n");
 }

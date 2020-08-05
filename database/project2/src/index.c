@@ -290,35 +290,37 @@ int insertIntoLeafAfterSplitting(pagenum_t oldLeafPageNum, int64_t key, char* va
 }
 // Insert input ‘key/value’ (record) to data file at the right place.
 // If success, return 0. Otherwise, return non-zero value.
-int db_insert(int64_t key, char * value) {
-    page_t* page = (page_t*)malloc(sizeof(struct page_t));
+int db_insert(int tableId, int64_t key, char * value) {
+    page_t* page;
     pagenum_t leafPageNum;
     char* tmp = (char*)malloc(sizeof(char) * 120);
 
+    fd = bufferGetFdOfTable(tableId);
+
     //check if key is already in the tree
-    if (db_find(key, tmp) == SUCCESS) {
+    if (db_find(tableId, key, tmp) == SUCCESS) {
         printf("[ERROR]: key is already in the tree\n");
         printf("[ERROR]: db_insert fail\n");
         free(tmp);
-        free(page);
         return FAIL;
     }
     free(tmp);
     
-    file_read_page(HEADERPAGENUM, page);
+    page = bufferRequestPage(tableId, HEADERPAGENUM);
 
     //there's no rootpage
     if (((headerPage_t*)page) -> rootPageNum == 0) {
-        free(page);
+        bufferUnpinPage(tableId, HEADERPAGENUM);
         return startNewTree(key, value);
     }
 
-    leafPageNum = findLeaf(key);
+    leafPageNum = findLeaf(tableId, key);
 
-    file_read_page(leafPageNum, page);
+    page = bufferRequestPage(tableId, leafPageNum);
+
 
     if (((leafPage_t*)page) -> numOfKeys < LEAF_ORDER - 1) {
-        free(page);
+        bufferUnpinPage(tableId, leafPageNum);
         return insertIntoLeaf(leafPageNum, key, value);
     }
 
@@ -331,15 +333,15 @@ int db_insert(int64_t key, char * value) {
 // Find the record containing input ‘key’.
 // • If found matching ‘key’, store matched ‘value’ string in ret_val and return 0. Otherwise, return
 // non-zero value.
-int db_find(int64_t key, char * ret_val) {
+int db_find(int tableId, int64_t key, char * ret_val) {
     pagenum_t pageNum;
     int i = 0;
-    pageNum = findLeaf(key);
+    fd = bufferGetFdOfTable(tableId);
+    pageNum = findLeaf(tableId, key);
     if (pageNum == 0) {
         return FAIL;
     }
-    page_t* page = (page_t*)malloc(sizeof(struct page_t));
-    file_read_page(pageNum, page);
+    page_t* page = bufferRequestPage(tableId, pageNum);
 
     while (i < ((leafPage_t*)page) -> numOfKeys) {
         if (((leafPage_t*)page) -> record[i].key == key) {
@@ -349,28 +351,30 @@ int db_find(int64_t key, char * ret_val) {
     }
 
     if (i == ((leafPage_t*)page) -> numOfKeys) {
-        free(page);
+        bufferUnpinPage(tableId, pageNum);
         return FAIL; // fail
     } else {
         strcpy(ret_val, ((leafPage_t*)page) -> record[i].value);
-        free(page);
+        bufferUnpinPage(tableId, pageNum);
         return SUCCESS; // success
     }
 }
 
 
-pagenum_t findLeaf(int64_t key) {
-    page_t* page = (page_t*)malloc(sizeof(struct page_t));
-    pagenum_t leafPageNum;
-    file_read_page(HEADERPAGENUM, page);
-    pagenum_t rootPageNum = ((headerPage_t*)page) -> rootPageNum;
-    file_read_page(rootPageNum, page);
+pagenum_t findLeaf(int tableId, int64_t key) {
+    page_t* page, * header;
+    pagenum_t leafPageNum, rootPageNum, prevLeafPageNum;
     int i = 0;
 
-    leafPageNum = rootPageNum;
-    if (leafPageNum == 0) {
+    header = bufferRequestPage(tableId, HEADERPAGENUM);
+    rootPageNum = ((headerPage_t*)page) -> rootPageNum;
+    bufferUnpinPage(tableId, HEADERPAGENUM);
+    if (rootPageNum == 0) {
         return 0;
     }
+
+    page = bufferRequestPage(tableId, rootPageNum);
+    leafPageNum = rootPageNum;
     while (!((internalPage_t*)page) -> isLeaf) {
         i = 0;
         while (i < ((internalPage_t*)page) -> numOfKeys) {
@@ -380,14 +384,16 @@ pagenum_t findLeaf(int64_t key) {
                 i++;
             }
         }
+        prevLeafPageNum = leafPageNum;
         if (i == 0) {
             leafPageNum = ((internalPage_t*)page) -> leftMostPageNum;
         } else {
             leafPageNum = ((internalPage_t*)page) -> record[i - 1].pageNum;
         }
-        file_read_page(leafPageNum, page);
+        bufferUnpinPage(tableId, prevLeafPageNum);
+        page = bufferRequestPage(tableId, leafPageNum);
     }
-    free(page);
+    bufferUnpinPage(tableId, leafPageNum);
     return leafPageNum;
 }
 
