@@ -8,24 +8,25 @@ int open_table(char *pathname) {
     return bufferOpenTable(pathname);
 } 
 
-int startNewTree(int64_t key, char* value) {
-    page_t* page = (page_t*)malloc(sizeof(struct page_t));
-    page_t* header = (page_t*)malloc(sizeof(struct page_t));
+int startNewTree(int tableId, int64_t key, char* value) {
+    page_t* page, * header;
     pagenum_t pageNum;
 
+    pageNum = bufferAllocPage(tableId);
+    page = bufferRequestPage(tableId, pageNum);
     ((leafPage_t*)page) -> parentPageNum = 0;
     ((leafPage_t*)page) -> isLeaf = 1;
     ((leafPage_t*)page) -> numOfKeys = 1;
     ((leafPage_t*)page) -> rightSiblingPageNum = 0;
     ((leafPage_t*)page) -> record[0].key = key;
     strcpy(((leafPage_t*)page) -> record[0].value, value);
-    pageNum = file_alloc_page();
-    file_read_page(HEADERPAGENUM, header);
+    bufferMakeDirty(tableId, pageNum);
+    bufferUnpinPage(tableId, pageNum);
+    
+    header = bufferRequestPage(tableId, HEADERPAGENUM);
     ((headerPage_t*)header) -> rootPageNum = pageNum;
-    file_write_page(HEADERPAGENUM, header);
-    file_write_page(pageNum, page);
-
-    free(page);
+    bufferMakeDirty(tableId, HEADERPAGENUM);
+    bufferUnpinPage(tableId, HEADERPAGENUM);
 
     return SUCCESS;
 }
@@ -295,6 +296,7 @@ int db_insert(int tableId, int64_t key, char * value) {
     pagenum_t leafPageNum;
     char* tmp = (char*)malloc(sizeof(char) * 120);
 
+    //set fd
     fd = bufferGetFdOfTable(tableId);
 
     //check if key is already in the tree
@@ -311,7 +313,7 @@ int db_insert(int tableId, int64_t key, char * value) {
     //there's no rootpage
     if (((headerPage_t*)page) -> rootPageNum == 0) {
         bufferUnpinPage(tableId, HEADERPAGENUM);
-        return startNewTree(key, value);
+        return startNewTree(tableId, key, value);
     }
 
     leafPageNum = findLeaf(tableId, key);
@@ -367,7 +369,7 @@ pagenum_t findLeaf(int tableId, int64_t key) {
     int i = 0;
 
     header = bufferRequestPage(tableId, HEADERPAGENUM);
-    rootPageNum = ((headerPage_t*)page) -> rootPageNum;
+    rootPageNum = ((headerPage_t*)header) -> rootPageNum;
     bufferUnpinPage(tableId, HEADERPAGENUM);
     if (rootPageNum == 0) {
         return 0;
@@ -400,16 +402,16 @@ pagenum_t findLeaf(int tableId, int64_t key) {
 // delete
 // Find the matching record and delete it if found.
 // If success, return 0. Otherwise, return non-zero value.
-int db_delete(int64_t key) {
+int db_delete(int tableId, int64_t key) {
     pagenum_t leafPageNum;
     char tmp[120];
 
-    if (db_find(key, tmp) == FAIL) {
+    if (db_find(tableId, key, tmp) == FAIL) {
         printf("[ERROR]: no %lld in the tree\n", key);
         printf("         db_delete(%lld) failed\n", key);
         return FAIL;
     } else {
-        leafPageNum = findLeaf(key);
+        leafPageNum = findLeaf(tableId, key);
         return deleteEntry(leafPageNum, key);
     }
 }

@@ -30,7 +30,7 @@ int open_table(char *pathname);
 
 
 int db_insert(int tableId, int64_t key, char *value);
-int startNewTree(int64_t key, char* value);
+int startNewTree(int tableId, int64_t key, char* value);
 int insertIntoLeaf(pagenum_t leafPageNum, int64_t key, char* value);
 int insertIntoNewRoot(pagenum_t leftLeafPageNum, int64_t newKey, pagenum_t rightLeafPageNum);
 int insertIntoInternal(pagenum_t parentPageNum, int leftChildIndex, int64_t newKey, pagenum_t rightChildPageNum);

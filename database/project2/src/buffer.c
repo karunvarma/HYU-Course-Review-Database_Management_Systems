@@ -115,7 +115,7 @@ page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
                 file_write_page(bufferPage -> pageNum, &bufferPage -> page);
             }
             fd = bufferGetFdOfTable(tableId);
-            file_read_page(pageNum, &bufferPage -> page);
+            file_read_page(pageNum, &(bufferPage -> page));
             retPage = &bufferPage -> page;
             bufferPage -> isDirty = 0;
             bufferPage -> isPinned = 0;
@@ -124,7 +124,6 @@ page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
             bufferPage -> tableId = tableId;
 
             updateToMostRecent(bufferPage);
-
         }
 
         bufferPage = bufferPage -> prev;
@@ -138,7 +137,7 @@ void updateToMostRecent(bufferPage_t* bufferPage) {
     bufferPage_t* mostRecent = bufferPage;
 
     while(mostRecent -> next != NULL) {
-        mostRecent = bufferPage -> next;
+        mostRecent = mostRecent -> next;
     }
     // no need , because bufferpage -> prev is null
     // bufferPage -> prev -> next = bufferPage -> next; 
