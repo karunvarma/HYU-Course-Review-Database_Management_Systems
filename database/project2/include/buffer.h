@@ -26,13 +26,36 @@ typedef struct bufferPage_t {
 
 int bufferOpenTable(char* pathname);
 
-void bufferWritePage(int tableid, pagenum_t pageNum);
+// find page in buffer pool
+// if found, return page and increase pincount
+// not found, replace least recently used buffer and increase pincount
 page_t* bufferRequestPage(int tableId, pagenum_t pageNum);
 
-
-int getFdOfTable(int tableId);
+int bufferGetFdOfTable(int tableId);
 void updateToMostRecent(bufferPage_t* bufferPage);
 
 int bufferInitDb(int bufNum);
 int bufferCloseTable(int table_id);
+
+//flush all data from buffer and destroy allocated buffer.
+//If success, return 0. Otherwise, return -1
+int bufferShutDownDb();
+
+//find bufferpage with tableId, pageNum in the bufferPool
+//if success return pointer, else NULL
+bufferPage_t* bufferFindBufferPage(int tableId, pagenum_t pageNum);
+
+//if success return 0, else -1
+int bufferMakeDirty(int tableId, pagenum_t pageNum);
+
+//if success return 0, else -1
+int bufferPinPage(int tableId, pagenum_t pageNum);
+
+//if success return 0, else -1
+int bufferUnpinPage(int tableId, pagenum_t pageNum);
+
+void bufferFreePage(int tableId, pagenum_t pageNum);
+
+pagenum_t bufferAllocPage(int tableId);
+
 #endif /* __BUFFER_H_*/

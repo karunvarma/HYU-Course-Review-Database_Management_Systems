@@ -28,9 +28,9 @@ int cut(int length);
 
 int open_table(char *pathname);
 
-int startNewTree(int64_t key, char* value);
 
 int db_insert(int64_t key, char *value);
+int startNewTree(int64_t key, char* value);
 int insertIntoLeaf(pagenum_t leafPageNum, int64_t key, char* value);
 int insertIntoNewRoot(pagenum_t leftLeafPageNum, int64_t newKey, pagenum_t rightLeafPageNum);
 int insertIntoInternal(pagenum_t parentPageNum, int leftChildIndex, int64_t newKey, pagenum_t rightChildPageNum);
@@ -63,6 +63,8 @@ int init_db (int buf_num);
 */
 int close_table(int table_id);
 
+//flush all data from buffer and destroy allocated buffer.
+//If success, return 0. Otherwise, return -1
 int shutdown_db();
 
 #endif /* __BPT_H__*/

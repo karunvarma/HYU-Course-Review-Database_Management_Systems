@@ -41,7 +41,7 @@ int main( int argc, char ** argv ) {
 
     open_table("db");
     tests();
-
+    // test();
     
 
     int input_key;
@@ -93,7 +93,7 @@ void test() {
     srand(time(NULL));
 
     //test constants
-    testNum = 500;
+    testNum = 1000;
     int keyRange = testNum * 100;
 
     testInput.keys = (int*)malloc(sizeof(int) * testNum);

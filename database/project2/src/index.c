@@ -709,5 +709,5 @@ int close_table(int table_id) {
 }
 
 int shutdown_db() {
-
+    return bufferShutDownDb();
 }

@@ -30,11 +30,11 @@ int bufferOpenTable(char* pathname) {
 int bufferInitDb(int bufNum) {
     numOfBuffer = bufNum;
     if (numOfBuffer == 0) {
-        return -1;
+        return FAIL;
     }
     bufferPool = (bufferPage_t*)malloc(sizeof(bufferPage_t) * bufNum);
     if (bufferPool == NULL) {
-        return -1;
+        return FAIL;
     }
     for (int i = 0; i < numOfBuffer; i++) {
         bufferPool[i].pageNum = 0;
@@ -52,60 +52,74 @@ int bufferInitDb(int bufNum) {
             bufferPool[i].next = &bufferPool[i + 1];
         }
     }
-    return 0;
+    return SUCCESS;
 }
 
 int bufferCloseTable(int table_id) {
     if (numOfBuffer == 0 || bufferPool == NULL) { 
         printf("error\n");
-        return -1;
+        return FAIL;
     }
 
-    for (int i = 0; i < numOfTables; i++) {
-        if (tables[i].tableId == table_id) {
-            fd = tables[i].fd;
-            tables[i].fd = 0;
-            tables[i].tableId = 0;
-            break;
-        }
-    }
+    fd = bufferGetFdOfTable(table_id);
 
     for (int i = 0; i < numOfBuffer; i++) {
         if (bufferPool[i].tableId == table_id && bufferPool[i].isDirty) {
             file_write_page(bufferPool[i].pageNum, &bufferPool[i].page);
+            bufferPool[i].isDirty = 0;
         }
     }
 
-    return 0;
+    return SUCCESS;
 
 }
 
-page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
-    
-    int i;
-    // if there's page in the buffer
-    for (i = 0; i < numOfBuffer; i++) {
-        if (bufferPool[i].pageNum == pageNum && bufferPool[i].tableId == tableId) {
-            return &(bufferPool[i].page);
+int bufferShutDownDb() {
+    for (int i = 0; i < numOfTables; i++) {
+        if (bufferCloseTable(tables[i].tableId) == FAIL) {
+            return FAIL;
         }
     }
+    free(bufferPool);
+    return SUCCESS;
+}
 
-    // no page in the buffer
-    // replace (LRU policy)
+page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
+    bufferPage_t* bufferPage = NULL;
     page_t* retPage = NULL;
-    bufferPage_t* bufferPage  = &bufferPool[0];
+    int i;
+
+    bufferPage = bufferFindBufferPage(tableId, pageNum);
+    // if there's page in the bufferpool
+    // pin the buffer and return page
+    if (bufferPage != NULL) {
+        while (bufferPage -> isPinned != 0) {
+            // wait until isPinned to be 0
+            printf("waiting ispinned to be 0\n");
+        }
+        retPage = &(bufferPage -> page);
+        (bufferPage -> isPinned)++;
+
+        return retPage;
+    }
+
+    // no page in the bufferpool
+    // replace (LRU policy)
+    
+    bufferPage  = &bufferPool[0];
 
     while(retPage == NULL) {
         if (bufferPage -> prev == NULL && bufferPage -> isPinned == 0) {
             if (bufferPage -> isDirty) {
-                fd = getFdOfTable(bufferPage -> tableId);
+                fd = bufferGetFdOfTable(bufferPage -> tableId);
                 file_write_page(bufferPage -> pageNum, &bufferPage -> page);
             }
-            fd = getFdOfTable(tableId);
+            fd = bufferGetFdOfTable(tableId);
             file_read_page(pageNum, &bufferPage -> page);
             retPage = &bufferPage -> page;
             bufferPage -> isDirty = 0;
             bufferPage -> isPinned = 0;
+            (bufferPage -> isPinned)++;
             bufferPage -> pageNum = pageNum;
             bufferPage -> tableId = tableId;
 
@@ -136,21 +150,116 @@ void updateToMostRecent(bufferPage_t* bufferPage) {
 }
 
 
-int getFdOfTable(int tableId) {
+int bufferGetFdOfTable(int tableId) {
     for(int i = 0; i < numOfTables; i++) {
         if (tables[i].tableId == tableId) {
             return tables[i].fd;
         }
     }
     printf("something's wrong\n");
-    return -1;
+    return FAIL;
 }
 
- void bufferWritePage(int tableid, pagenum_t pageNum) {
-     //find page 
 
+bufferPage_t* bufferFindBufferPage(int tableId, pagenum_t pageNum) {
+    for (int i = 0; i < numOfBuffer; i++) {
+        if (bufferPool[i].tableId == tableId && bufferPool[i].pageNum == pageNum) {
+            return &bufferPool[i];
+        }
+    }
+    return NULL;
+}
 
-     // page exist
+int bufferMakeDirty(int tableId, pagenum_t pageNum) {
+    bufferPage_t* bufferPage;
+    
+    bufferPage = bufferFindBufferPage(tableId, pageNum);
 
-     //page not exist , 
- }
+    if (bufferPage == NULL) {
+        //for debug
+        printf("should not execute this line\n");
+        return FAIL;
+    } else {
+        bufferPage -> isDirty = 1;
+        return SUCCESS;
+    }
+}
+
+int bufferPinPage(int tableId, pagenum_t pageNum) {
+    bufferPage_t* bufferPage;
+
+    bufferPage = bufferFindBufferPage(tableId, pageNum);
+
+    if (bufferPage == NULL) {
+        //for debug
+        printf("should not execute this line\n");
+        return FAIL;
+    } else {
+        (bufferPage -> isPinned)++;
+        return SUCCESS;
+    }
+}
+
+int bufferUnpinPage(int tableId, pagenum_t pageNum) {
+    bufferPage_t* bufferPage;
+
+    bufferPage = bufferFindBufferPage(tableId, pageNum);
+
+    if (bufferPage == NULL) {
+        //for debug
+        printf("should not execute this line\n");
+        return FAIL;
+    } else {
+        (bufferPage -> isPinned)--;
+        return SUCCESS;
+    }
+}
+
+void bufferFreePage(int tableId, pagenum_t pageNum) {
+    page_t* page, * header;
+
+    page = bufferRequestPage(tableId, pageNum);
+    header = bufferRequestPage(tableId, HEADERPAGENUM);
+    
+    ((freePage_t*)page) -> nextFreePageNum = ((headerPage_t*)header) -> freePageNum;
+    ((headerPage_t*)header) -> freePageNum = pageNum;
+
+    bufferMakeDirty(tableId, pageNum);
+    bufferUnpinPage(tableId, pageNum);
+    bufferMakeDirty(tableId, HEADERPAGENUM);
+    bufferUnpinPage(tableId, HEADERPAGENUM);
+}
+
+pagenum_t bufferAllocPage(int tableId) {
+    page_t* header;
+    page_t* freePage;
+    pagenum_t freePageNum;
+    
+
+    header = bufferRequestPage(tableId, HEADERPAGENUM);
+    freePageNum = ((headerPage_t*)header) -> freePageNum;
+
+    if (freePageNum == 0) {
+        freePageNum = ((headerPage_t*)header) -> numOfPages;
+        (((headerPage_t*)header) -> numOfPages)++;
+
+        bufferMakeDirty(tableId, HEADERPAGENUM);
+        bufferUnpinPage(tableId, HEADERPAGENUM);
+
+        //make physical db size increase
+        page_t page = {0, };
+        fd = bufferGetFdOfTable(tableId);
+        file_write_page(freePageNum, &page);
+        return freePageNum;
+    } else {
+        freePage = bufferRequestPage(tableId, freePageNum);
+
+        ((headerPage_t*)header) -> freePageNum = ((freePage_t*)freePage) -> nextFreePageNum;
+
+        bufferMakeDirty(tableId, HEADERPAGENUM);
+        bufferUnpinPage(tableId, HEADERPAGENUM);
+        bufferUnpinPage(tableId, freePageNum);
+        return freePageNum;
+
+    }
+}
