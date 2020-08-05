@@ -41,6 +41,7 @@ int listIsKeyExist(list* list, int key);
 
 void test();
 
+void printLRUList();
 void printBufferPool();
 void printTables();
 
@@ -57,6 +58,7 @@ int main( int argc, char ** argv ) {
     int input_key;
     char input_value[120];
     char instruction;
+    char retval[120];
     printf("> ");
     while (scanf("%c", &instruction) != EOF) {
         switch (instruction) {
@@ -81,7 +83,6 @@ int main( int argc, char ** argv ) {
             printf("open %s, tableId: %d\n", input_value, open_table(input_value));
             break;
         case 'f':
-            char retval[120];
             scanf("%d", &inputTableId);
             scanf("%d", &input_key);
             db_find(inputTableId, input_key, retval);
@@ -152,7 +153,7 @@ void test() {
             //input
             int key = listGetRandomKey(&testInput);
             printf("[TEST]: Insert %d\n", key);
-            db_insert(key, "value");
+            db_insert(1, key, "value");
             listRemoveKey(&testInput, key);
             listAddKey(&testInputted, key);
             printDb();
@@ -166,7 +167,7 @@ void test() {
             } else {
                 int key = listGetRandomKey(&testInputted);
                 printf("[TEST]: Delete %d\n", key);
-                db_delete(key);
+                db_delete(1, key);
                 listRemoveKey(&testInputted, key);
                 printDb();
                 printTree();
@@ -369,10 +370,44 @@ int listIsKeyExist(list* list, int key) {
     return FAIL;
 }
 
+void printLRUList() {
+    int i = 0;
+    bufferPage_t* bufferPage;
+    bufferPage = &bufferPool[0];
+
+    printf("LRUList: ");
+    for (i = 0; i < numOfBuffer; i++) {
+        if (bufferPool[i].prev == NULL) {
+            break;
+        }
+    }
+    printf("%d -> ", i);
+
+    while (bufferPool[i].next != NULL) {
+        bufferPage = bufferPool[i].next;
+
+        // find index of bufferPage
+        for (int j = 0; j < numOfBuffer; j++) {
+            if (&bufferPool[j] == bufferPage) {
+                i = j;
+                if (bufferPool[i].next == NULL) {
+                    printf("%d\n",i);
+                } else {
+                    printf("%d -> ", i);
+                }
+                break;
+            }
+        }
+
+    }
+
+}
 
 void printBufferPool() {
     printf("******************printBufferPoolStart******************\n");
 
+    printLRUList();
+    
     for (int i = 0; i < numOfBuffer; i++) {
         printf("----------------------------------\n");
         printf("bufferPool[%d]\n", i);
