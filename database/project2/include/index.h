@@ -47,6 +47,7 @@ int db_find(int tableId, int64_t key, char *ret_val);
 pagenum_t findLeaf(int tableId, int64_t key);
 
 int db_delete(int tableId, int64_t key);
+//pinMax: 2 (1, 1, 1, 2, 2)
 //delete entry from internal or leaf
 int deleteEntry(int tableId, pagenum_t pageNum, int64_t key);
 void removeEntryFromPage(int tableId, pagenum_t pageNum, int64_t key);

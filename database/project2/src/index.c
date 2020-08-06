@@ -407,7 +407,8 @@ pagenum_t findLeaf(int tableId, int64_t key) {
 int db_delete(int tableId, int64_t key) {
     pagenum_t leafPageNum;
     char tmp[120];
-
+    //set fd
+    fd = bufferGetFdOfTable(tableId);
     if (db_find(tableId, key, tmp) == FAIL) {
         printf("[ERROR]: no %lld in the tree\n", key);
         printf("         db_delete(%lld) failed\n", key);

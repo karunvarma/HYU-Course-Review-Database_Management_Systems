@@ -80,6 +80,7 @@ int bufferShutDownDb() {
         }
     }
     free(bufferPool);
+    bufferPool = NULL;
     return SUCCESS;
 }
 
@@ -228,22 +229,24 @@ int bufferUnpinPage(int tableId, pagenum_t pageNum) {
 
 void bufferFreePage(int tableId, pagenum_t pageNum) {
     page_t* page, * header;
+    pagenum_t nextFreePageNum;
 
-    page = bufferRequestPage(tableId, pageNum);
-    ((freePage_t*)page) -> nextFreePageNum = ((headerPage_t*)header) -> freePageNum;
-    bufferMakeDirty(tableId, pageNum);
-    bufferUnpinPage(tableId, pageNum);
-    
     header = bufferRequestPage(tableId, HEADERPAGENUM);
+    nextFreePageNum = ((headerPage_t*)header) -> freePageNum;
     ((headerPage_t*)header) -> freePageNum = pageNum;
     bufferMakeDirty(tableId, HEADERPAGENUM);
     bufferUnpinPage(tableId, HEADERPAGENUM);
+
+    page = bufferRequestPage(tableId, pageNum);
+    ((freePage_t*)page) -> nextFreePageNum = nextFreePageNum;
+    bufferMakeDirty(tableId, pageNum);
+    bufferUnpinPage(tableId, pageNum);
+    
 }
 
 pagenum_t bufferAllocPage(int tableId) {
-    page_t* header;
-    page_t* freePage;
-    pagenum_t freePageNum;
+    page_t* header, * freePage;
+    pagenum_t freePageNum, nextFreePageNum;
     
 
     header = bufferRequestPage(tableId, HEADERPAGENUM);
@@ -263,12 +266,12 @@ pagenum_t bufferAllocPage(int tableId) {
         return freePageNum;
     } else {
         freePage = bufferRequestPage(tableId, freePageNum);
+        nextFreePageNum = ((freePage_t*)freePage) -> nextFreePageNum;
+        bufferUnpinPage(tableId, freePageNum);
 
-        ((headerPage_t*)header) -> freePageNum = ((freePage_t*)freePage) -> nextFreePageNum;
-
+        ((headerPage_t*)header) -> freePageNum = nextFreePageNum;
         bufferMakeDirty(tableId, HEADERPAGENUM);
         bufferUnpinPage(tableId, HEADERPAGENUM);
-        bufferUnpinPage(tableId, freePageNum);
         return freePageNum;
 
     }

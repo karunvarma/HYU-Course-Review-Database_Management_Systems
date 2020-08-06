@@ -2,6 +2,8 @@
 #define __BUFFER_H_
 
 #include <fcntl.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include "file.h"
 
 #define SUCCESS 0
@@ -55,8 +57,10 @@ int bufferPinPage(int tableId, pagenum_t pageNum);
 //if success return 0, else -1
 int bufferUnpinPage(int tableId, pagenum_t pageNum);
 
+// pinMax: 1
 void bufferFreePage(int tableId, pagenum_t pageNum);
 
+//pinMax: 2 (can be 1)
 //alloc pagenum and write {0} 4kb into physical file
 pagenum_t bufferAllocPage(int tableId);
 
