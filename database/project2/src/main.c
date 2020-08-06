@@ -219,9 +219,9 @@ void printInternal(pagenum_t internalPageNum) {
     file_read_page(internalPageNum, internalPage);
     printf("PageNum: %llu\n", internalPageNum);
     printf("InternalPage\n");
-    printf("internalPage -> parentPageNum: %llu\ninternalPage -> isLeaf: %d\ninternalPage -> numOfKeys: %d\ninternalPage ->leftMostPageNum: %llu\n", ((internalPage_t*)internalPage) -> parentPageNum, ((internalPage_t*)internalPage) -> isLeaf, ((internalPage_t*)internalPage) -> numOfKeys, ((internalPage_t*)internalPage) ->leftMostPageNum);
+    printf("parentPageNum: %llu\nisLeaf: %d\nnumOfKeys: %d\ninternalPage ->leftMostPageNum: %llu\n", ((internalPage_t*)internalPage) -> parentPageNum, ((internalPage_t*)internalPage) -> isLeaf, ((internalPage_t*)internalPage) -> numOfKeys, ((internalPage_t*)internalPage) ->leftMostPageNum);
     for (int i = 0; i < ((internalPage_t*)internalPage) -> numOfKeys; i++) {
-        printf("internalPage -> record[%d].key: %lld, internalPage -> record[%d].pageNum: %llu\n", i, ((internalPage_t*)internalPage) -> record[i].key, i, ((internalPage_t*)internalPage) -> record[i].pageNum);
+        printf("record[%d].key: %lld, record[%d].pageNum: %llu\n", i, ((internalPage_t*)internalPage) -> record[i].key, i, ((internalPage_t*)internalPage) -> record[i].pageNum);
     }
     printf("-------------------------------------------------------------\n");
     free(internalPage);
@@ -231,9 +231,9 @@ void printLeaf(pagenum_t leafPageNum) {
     file_read_page(leafPageNum, leafPage);
     printf("PageNum: %llu\n", leafPageNum);
     printf("LeafPage\n");
-    printf("leafPage -> parentPageNum: %llu\nleafPage -> isLeaf: %d\nleafPage -> numOfKeys: %d\nleafPage -> rightSiblingPageNum: %llu\n", ((leafPage_t*)leafPage) -> parentPageNum, ((leafPage_t*)leafPage) -> isLeaf, ((leafPage_t*)leafPage) -> numOfKeys, ((leafPage_t*)leafPage) -> rightSiblingPageNum);
+    printf("parentPageNum: %llu\nisLeaf: %d\nnumOfKeys: %d\nrightSiblingPageNum: %llu\n", ((leafPage_t*)leafPage) -> parentPageNum, ((leafPage_t*)leafPage) -> isLeaf, ((leafPage_t*)leafPage) -> numOfKeys, ((leafPage_t*)leafPage) -> rightSiblingPageNum);
     for (int i = 0; i < ((leafPage_t*)leafPage) -> numOfKeys; i++) {
-        printf("leafPage -> record[%d].key: %lld, leafPage -> record[%d].value: %s\n", i, ((leafPage_t*)leafPage) -> record[i].key, i, ((leafPage_t*)leafPage) -> record[i].value);
+        printf("record[%d].key: %lld, record[%d].value: %s\n", i, ((leafPage_t*)leafPage) -> record[i].key, i, ((leafPage_t*)leafPage) -> record[i].value);
     }
     printf("-------------------------------------------------------------\n");
     free(leafPage);
@@ -407,10 +407,36 @@ void printBufferPool() {
     printf("******************printBufferPoolStart******************\n");
 
     printLRUList();
-    
+    page_t* page;
+
     for (int i = 0; i < numOfBuffer; i++) {
         printf("----------------------------------\n");
         printf("bufferPool[%d]\n", i);
+        printf("page:\n");
+        page = &bufferPool[i].page;
+        
+        if (bufferPool[i].pageNum == HEADERPAGENUM) {
+            printf("***\n");
+            printf("PageNum: %llu\n", bufferPool[i].pageNum);
+            printf("freePageNum: %llu\nnumOfPages: %llu\nrootPageNum: %llu\n", ((headerPage_t*)page) -> freePageNum, ((headerPage_t*)page) -> numOfPages, ((headerPage_t*)page) -> rootPageNum);
+            printf("***\n");
+        } else if (((internalPage_t*)page) -> isLeaf == 0) {
+            printf("***\n");
+            printf("PageNum: %llu\n", bufferPool[i].pageNum);
+            printf("parentPageNum: %llu\nisLeaf: %d\nnumOfKeys: %d\nleftMostPageNum: %llu\n", ((internalPage_t*)page) -> parentPageNum, ((internalPage_t*)page) -> isLeaf, ((internalPage_t*)page) -> numOfKeys, ((internalPage_t*)page) ->leftMostPageNum);
+            for (int i = 0; i < ((internalPage_t*)page) -> numOfKeys; i++) {
+                printf("record[%d].key: %lld, record[%d].pageNum: %llu\n", i, ((internalPage_t*)page) -> record[i].key, i, ((internalPage_t*)page) -> record[i].pageNum);
+            }
+            printf("***\n");
+        } else if (((internalPage_t*)page) -> isLeaf == 1) {
+            printf("***\n");
+            printf("PageNum: %llu\n", bufferPool[i].pageNum);
+            printf("parentPageNum: %llu\nisLeaf: %d\nnumOfKeys: %d\nrightSiblingPageNum: %llu\n", ((leafPage_t*)page) -> parentPageNum, ((leafPage_t*)page) -> isLeaf, ((leafPage_t*)page) -> numOfKeys, ((leafPage_t*)page) -> rightSiblingPageNum);
+            for (int i = 0; i < ((leafPage_t*)page) -> numOfKeys; i++) {
+                printf("record[%d].key: %lld, record[%d].value: %s\n", i, ((leafPage_t*)page) -> record[i].key, i, ((leafPage_t*)page) -> record[i].value);
+            }
+            printf("***\n");
+        }
         printf("tableId: %d\n", bufferPool[i].tableId);
         printf("pageNum: %llu\n", bufferPool[i].pageNum);
         printf("isDirty: %d\n", bufferPool[i].isDirty);
