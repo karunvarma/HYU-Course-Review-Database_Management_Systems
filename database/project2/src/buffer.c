@@ -1,5 +1,4 @@
 #include "buffer.h"
-#include "file.h"
 
 bufferPage_t* bufferPool = NULL;
 int numOfBuffer = 0;

@@ -31,10 +31,10 @@ int startNewTree(int tableId, int64_t key, char* value) {
     return SUCCESS;
 }
 
-int insertIntoLeaf(pagenum_t leafPageNum, int64_t key, char* value) {
+int insertIntoLeaf(int tableId, pagenum_t pageNum, int64_t key, char* value) {
     int i, insertionPoint;
-    page_t* page = (page_t*)malloc(sizeof(struct page_t));
-    file_read_page(leafPageNum, page);
+    page_t* page;
+    page = bufferRequestPage(tableId, pageNum);
 
     insertionPoint = 0;
     while (insertionPoint < ((leafPage_t*)page) -> numOfKeys 
@@ -49,8 +49,9 @@ int insertIntoLeaf(pagenum_t leafPageNum, int64_t key, char* value) {
     ((leafPage_t*)page) -> record[insertionPoint].key = key;
     strcpy(((leafPage_t*)page) -> record[insertionPoint].value, value);
     (((leafPage_t*)page) -> numOfKeys)++;
-    file_write_page(leafPageNum, page);
-    free(page);
+
+    bufferMakeDirty(tableId, pageNum);
+    bufferUnpinPage(tableId, pageNum);
     return SUCCESS;
 }
 
@@ -61,20 +62,28 @@ int cut( int length ) {
         return length/2 + 1;
 }
 
-// make root that has left leaf as leftmost child, right leaf as first child
-int insertIntoNewRoot(pagenum_t leftLeafPageNum, int64_t newKey, pagenum_t rightLeafPageNum) {
-    page_t* root = (page_t*)malloc(sizeof(struct page_t));
-    page_t* leftLeaf = (page_t*)malloc(sizeof(struct page_t));
-    page_t* rightLeaf = (page_t*)malloc(sizeof(struct page_t));
-    page_t* header = (page_t*)malloc(sizeof(struct page_t));
+int insertIntoNewRoot(int tableId, pagenum_t leftLeafPageNum, int64_t newKey, pagenum_t rightLeafPageNum) {
+    page_t* root, * leftLeaf, * rightLeaf, * header;
     pagenum_t rootPageNum;
 
-    rootPageNum = file_alloc_page();
-    file_read_page(HEADERPAGENUM, header);
-    file_read_page(leftLeafPageNum, leftLeaf);
-    file_read_page(rightLeafPageNum, rightLeaf);
-
+    
+    header = bufferRequestPage(tableId, HEADERPAGENUM);
     ((headerPage_t*)header) -> rootPageNum = rootPageNum;
+    bufferMakeDirty(tableId, HEADERPAGENUM);
+    bufferUnpinPage(tableId, HEADERPAGENUM);
+
+    leftLeaf = bufferRequestPage(tableId, leftLeafPageNum);
+    ((leafPage_t*)leftLeaf) -> parentPageNum = rootPageNum;
+    bufferMakeDirty(tableId, leftLeafPageNum);
+    bufferUnpinPage(tableId, leftLeafPageNum);
+
+    rightLeaf = bufferRequestPage(tableId, rightLeafPageNum);
+    ((leafPage_t*)rightLeaf) -> parentPageNum = rootPageNum;
+    bufferMakeDirty(tableId, rightLeafPageNum);
+    bufferUnpinPage(tableId, rightLeafPageNum);
+    
+    rootPageNum = bufferAllocPage(tableId);
+    root = bufferRequestPage(tableId, rootPageNum);
     ((internalPage_t*)root) -> parentPageNum = HEADERPAGENUM;
     ((internalPage_t*)root) -> isLeaf = 0;
     ((internalPage_t*)root) -> numOfKeys = 0;
@@ -82,18 +91,9 @@ int insertIntoNewRoot(pagenum_t leftLeafPageNum, int64_t newKey, pagenum_t right
     ((internalPage_t*)root) -> leftMostPageNum = leftLeafPageNum;
     ((internalPage_t*)root) -> record[0].key = newKey;
     ((internalPage_t*)root) -> record[0].pageNum = rightLeafPageNum;
-    ((leafPage_t*)leftLeaf) -> parentPageNum = rootPageNum;
-    ((leafPage_t*)rightLeaf) -> parentPageNum = rootPageNum;
+    bufferMakeDirty(tableId, rootPageNum);
+    bufferUnpinPage(tableId, rootPageNum);
 
-    file_write_page(HEADERPAGENUM, header);
-    file_write_page(leftLeafPageNum, leftLeaf);
-    file_write_page(rightLeafPageNum, rightLeaf);
-    file_write_page(rootPageNum, root);
-
-    free(header);
-    free(root);
-    free(leftLeaf);
-    free(rightLeaf);
     return SUCCESS;
 }
 
@@ -196,22 +196,23 @@ int insertIntoInternalAfterSplitting(pagenum_t parentPageNum, int leftChildIndex
     free(child);
     free(parent);
     free(rightParent);
-    return insertIntoParent(parentPageNum, kPrime, rightParentPageNum);
+    //TODO: update below
+    return insertIntoParent(1, parentPageNum, kPrime, rightParentPageNum);
 
 
 }
-int insertIntoParent(pagenum_t leftChildPageNum, int64_t newKey, pagenum_t rightChildPageNum) {
+int insertIntoParent(int tableId, pagenum_t leftChildPageNum, int64_t newKey, pagenum_t rightChildPageNum) {
 
     int leftIndex;
     page_t* leftChild, * parent;
     pagenum_t parentPageNum;
-    leftChild = (page_t*)malloc(sizeof(struct page_t));
-    file_read_page(leftChildPageNum, leftChild);
+
+    leftChild = bufferRequestPage(tableId, leftChildPageNum);
     parentPageNum = ((leafPage_t*)leftChild) -> parentPageNum;
-    free(leftChild);
+    bufferUnpinPage(tableId, leftChildPageNum);
     //leftChild was rootPage
     if (parentPageNum == HEADERPAGENUM) {
-        return insertIntoNewRoot(leftChildPageNum, newKey, rightChildPageNum);
+        return insertIntoNewRoot(tableId, leftChildPageNum, newKey, rightChildPageNum);
     }
     leftIndex = getIndexOfLeft(parentPageNum, leftChildPageNum);
 
@@ -228,7 +229,7 @@ int insertIntoParent(pagenum_t leftChildPageNum, int64_t newKey, pagenum_t right
     return SUCCESS;
 
 }
-int insertIntoLeafAfterSplitting(pagenum_t oldLeafPageNum, int64_t key, char* value) {
+int insertIntoLeafAfterSplitting(int tableId, pagenum_t oldLeafPageNum, int64_t key, char* value) {
 
     page_t* newLeaf, * oldLeaf;
     pagenum_t newLeafPageNum;
@@ -236,16 +237,16 @@ int insertIntoLeafAfterSplitting(pagenum_t oldLeafPageNum, int64_t key, char* va
     int insertionIndex, split, i, j;
     int64_t newKey;
 
-    newLeaf = (page_t*)malloc(sizeof(struct page_t));
-    oldLeaf = (page_t*)malloc(sizeof(struct page_t));
     temporaryRecord = (leafRecord_t*)malloc(sizeof(struct leafRecord_t) * LEAF_ORDER);
+
+    newLeafPageNum = bufferAllocPage(tableId);
+    newLeaf = bufferRequestPage(tableId, newLeafPageNum);
     ((leafPage_t*)newLeaf) -> parentPageNum = 0;
     ((leafPage_t*)newLeaf) -> isLeaf = 1;
     ((leafPage_t*)newLeaf) -> numOfKeys = 0;
     ((leafPage_t*)newLeaf) -> rightSiblingPageNum = 0;
 
-    file_read_page(oldLeafPageNum, oldLeaf);
-    newLeafPageNum = file_alloc_page();
+    oldLeaf = bufferRequestPage(tableId, oldLeafPageNum);
 
     insertionIndex = 0;
     while (insertionIndex < LEAF_ORDER - 1 && ((leafPage_t*)oldLeaf) -> record[insertionIndex].key < key) {
@@ -283,11 +284,11 @@ int insertIntoLeafAfterSplitting(pagenum_t oldLeafPageNum, int64_t key, char* va
     ((leafPage_t*)newLeaf) -> parentPageNum = ((leafPage_t*)oldLeaf) -> parentPageNum;
     newKey = ((leafPage_t*)newLeaf) -> record[0].key;
 
-    file_write_page(newLeafPageNum, newLeaf);
-    file_write_page(oldLeafPageNum, oldLeaf);
-    free(newLeaf);
-    free(oldLeaf);
-    return insertIntoParent(oldLeafPageNum, newKey, newLeafPageNum);
+    bufferMakeDirty(tableId, oldLeafPageNum);
+    bufferMakeDirty(tableId, newLeafPageNum);
+    bufferUnpinPage(tableId, oldLeafPageNum);
+    bufferUnpinPage(tableId, newLeafPageNum);
+    return insertIntoParent(tableId, oldLeafPageNum, newKey, newLeafPageNum);
 }
 // Insert input ‘key/value’ (record) to data file at the right place.
 // If success, return 0. Otherwise, return non-zero value.
@@ -316,6 +317,8 @@ int db_insert(int tableId, int64_t key, char * value) {
         return startNewTree(tableId, key, value);
     }
 
+    bufferUnpinPage(tableId, HEADERPAGENUM);
+
     leafPageNum = findLeaf(tableId, key);
 
     page = bufferRequestPage(tableId, leafPageNum);
@@ -323,13 +326,13 @@ int db_insert(int tableId, int64_t key, char * value) {
 
     if (((leafPage_t*)page) -> numOfKeys < LEAF_ORDER - 1) {
         bufferUnpinPage(tableId, leafPageNum);
-        return insertIntoLeaf(leafPageNum, key, value);
+        return insertIntoLeaf(tableId, leafPageNum, key, value);
     }
 
 
 
-    free(page);
-    return insertIntoLeafAfterSplitting(leafPageNum, key, value);
+    bufferUnpinPage(tableId,leafPageNum);
+    return insertIntoLeafAfterSplitting(tableId, leafPageNum, key, value);
 }
 
 // Find the record containing input ‘key’.

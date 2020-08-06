@@ -2,9 +2,10 @@
 #define __BUFFER_H_
 
 #include <fcntl.h>
-#include "index.h"
 #include "file.h"
 
+#define SUCCESS 0
+#define FAIL -1
 
 typedef struct table {
     int tableId;
@@ -56,6 +57,7 @@ int bufferUnpinPage(int tableId, pagenum_t pageNum);
 
 void bufferFreePage(int tableId, pagenum_t pageNum);
 
+//alloc pagenum and write {0} 4kb into physical file
 pagenum_t bufferAllocPage(int tableId);
 
 #endif /* __BUFFER_H_*/

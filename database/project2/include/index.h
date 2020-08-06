@@ -8,6 +8,8 @@
 #include <stdbool.h>
 #include <string.h>
 #include "file.h"
+#include "buffer.h"
+
 #ifdef WINDOWS
 #define bool char
 #define false 0
@@ -31,12 +33,14 @@ int open_table(char *pathname);
 
 int db_insert(int tableId, int64_t key, char *value);
 int startNewTree(int tableId, int64_t key, char* value);
-int insertIntoLeaf(pagenum_t leafPageNum, int64_t key, char* value);
-int insertIntoNewRoot(pagenum_t leftLeafPageNum, int64_t newKey, pagenum_t rightLeafPageNum);
+int insertIntoLeaf(int tableId, pagenum_t pageNum, int64_t key, char* value);
+int insertIntoLeafAfterSplitting(int tableId, pagenum_t leafPageNum, int64_t key, char* value);
+int insertIntoParent(int tableId, pagenum_t leftChildPageNum, int64_t newKey, pagenum_t rightChildPageNum);
+
+// make root that has left leaf as leftmost child, right leaf as first child
+int insertIntoNewRoot(int tableId, pagenum_t leftLeafPageNum, int64_t newKey, pagenum_t rightLeafPageNum);
 int insertIntoInternal(pagenum_t parentPageNum, int leftChildIndex, int64_t newKey, pagenum_t rightChildPageNum);
-int insertIntoParent(pagenum_t leftChildPageNum, int64_t newKey, pagenum_t rightChildPageNum);
 int getIndexOfLeft(pagenum_t parentPageNum, pagenum_t childPageNum);
-int insertIntoLeafAfterSplitting(pagenum_t leafPageNum, int64_t key, char* value);
 int insertIntoInternalAfterSplitting(pagenum_t parentPageNum, int leftChildIndex, int64_t newKey, pagenum_t rightChildPageNum);
 
 int db_find(int tableId, int64_t key, char *ret_val);
