@@ -163,6 +163,7 @@ void test() {
             listAddKey(&testInputted, key);
             printDb();
             printTree();
+            printBufferPool();
         } else {
             //delete
 
@@ -173,9 +174,10 @@ void test() {
                 int key = listGetRandomKey(&testInputted);
                 printf("[TEST]: Delete %d\n", key);
                 listRemoveKey(&testInputted, key);
-                // db_delete(1, key);
-                // printDb();
-                // printTree();
+                db_delete(1, key);
+                printDb();
+                printTree();
+                printBufferPool();
             }
         }
 

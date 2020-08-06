@@ -48,12 +48,12 @@ pagenum_t findLeaf(int tableId, int64_t key);
 
 int db_delete(int tableId, int64_t key);
 //delete entry from internal or leaf
-int deleteEntry(pagenum_t pageNum, int64_t key);
-int getNeighborIndex(pagenum_t pageNum);
-void removeEntryFromPage(pagenum_t pageNum, int64_t key);
-int adjustRoot(pagenum_t pageNum);
-int coalescePages(pagenum_t neighborPageNum , int64_t kPrime, pagenum_t pageNum, int neighborIndex);
-int redistributePages(pagenum_t neighborPageNum, int64_t kPrime, pagenum_t pageNum, int neighborIndex, int kPrimeIndex);
+int deleteEntry(int tableId, pagenum_t pageNum, int64_t key);
+void removeEntryFromPage(int tableId, pagenum_t pageNum, int64_t key);
+int adjustRoot(int tableId, pagenum_t pageNum);
+int getNeighborIndex(int tableId, pagenum_t pageNum);
+int coalescePages(int tableId, pagenum_t neighborPageNum , int64_t kPrime, pagenum_t pageNum, int neighborIndex);
+int redistributePages(int tableId, pagenum_t neighborPageNum, int64_t kPrime, pagenum_t pageNum, int neighborIndex, int kPrimeIndex);
 
 /* 
 Allocate the buffer pool (array) with the given number of entries. 
