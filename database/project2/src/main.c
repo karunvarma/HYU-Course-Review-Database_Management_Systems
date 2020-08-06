@@ -50,9 +50,9 @@ void printTables();
 int main( int argc, char ** argv ) {
 
     open_table("db");
-    init_db(5);
+    init_db(10);
     tests();
-    // test();
+    test();
     
     int inputTableId;
     int input_key;
@@ -88,6 +88,11 @@ int main( int argc, char ** argv ) {
             db_find(inputTableId, input_key, retval);
             printf("retval: %s\n", retval);
             break;
+        case 'r':
+            shutdown_db();
+            init_db(10);
+            break;
+
         default:
             break;
         }
@@ -167,10 +172,10 @@ void test() {
             } else {
                 int key = listGetRandomKey(&testInputted);
                 printf("[TEST]: Delete %d\n", key);
-                db_delete(1, key);
                 listRemoveKey(&testInputted, key);
-                printDb();
-                printTree();
+                // db_delete(1, key);
+                // printDb();
+                // printTree();
             }
         }
 
@@ -203,6 +208,7 @@ void printFreePageList(){
 
 
 }
+
 void printHeader(pagenum_t headerPageNum) {
     page_t* headerPage = (page_t*)malloc(sizeof(struct page_t));
     file_read_page(headerPageNum, headerPage);
@@ -214,6 +220,7 @@ void printHeader(pagenum_t headerPageNum) {
     printf("-------------------------------------------------------------\n");
     free(headerPage);
 }
+
 void printInternal(pagenum_t internalPageNum) {
     page_t* internalPage = (page_t*)malloc(sizeof(struct page_t));
     file_read_page(internalPageNum, internalPage);

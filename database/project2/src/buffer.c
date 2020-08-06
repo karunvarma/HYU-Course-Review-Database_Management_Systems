@@ -99,6 +99,7 @@ page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
         retPage = &(bufferPage -> page);
         (bufferPage -> isPinned)++;
 
+        updateToMostRecent(bufferPage);
         return retPage;
     }
 
@@ -108,7 +109,13 @@ page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
     bufferPage  = &bufferPool[0];
 
     while(retPage == NULL) {
-        if (bufferPage -> prev == NULL && bufferPage -> isPinned == 0) {
+        if (bufferPage -> prev == NULL) {
+            if (bufferPage -> isPinned != 0) {
+                while(bufferPage -> isPinned != 0) {
+                    printf("waiting ispinned to be 0\n");
+                }
+            }
+
             if (bufferPage -> isDirty) {
                 fd = bufferGetFdOfTable(bufferPage -> tableId);
                 file_write_page(bufferPage -> pageNum, &bufferPage -> page);
@@ -134,13 +141,19 @@ page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
 
 void updateToMostRecent(bufferPage_t* bufferPage) {
     bufferPage_t* mostRecent = bufferPage;
-
+    if (bufferPage -> next == NULL) {
+        // bufferPage is already most recent
+        // nothing to do
+        return;
+    }
     while(mostRecent -> next != NULL) {
         mostRecent = mostRecent -> next;
     }
     // no need , because bufferpage -> prev is null
-    // bufferPage -> prev -> next = bufferPage -> next; 
-    bufferPage -> next -> prev = NULL;
+    if (bufferPage -> prev != NULL) {
+        bufferPage -> prev -> next = bufferPage -> next; 
+    }
+    bufferPage -> next -> prev = bufferPage -> prev;
 
     mostRecent -> next = bufferPage;
     bufferPage -> prev = mostRecent;
@@ -217,13 +230,12 @@ void bufferFreePage(int tableId, pagenum_t pageNum) {
     page_t* page, * header;
 
     page = bufferRequestPage(tableId, pageNum);
-    header = bufferRequestPage(tableId, HEADERPAGENUM);
-    
     ((freePage_t*)page) -> nextFreePageNum = ((headerPage_t*)header) -> freePageNum;
-    ((headerPage_t*)header) -> freePageNum = pageNum;
-
     bufferMakeDirty(tableId, pageNum);
     bufferUnpinPage(tableId, pageNum);
+    
+    header = bufferRequestPage(tableId, HEADERPAGENUM);
+    ((headerPage_t*)header) -> freePageNum = pageNum;
     bufferMakeDirty(tableId, HEADERPAGENUM);
     bufferUnpinPage(tableId, HEADERPAGENUM);
 }

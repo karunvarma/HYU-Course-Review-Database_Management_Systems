@@ -39,9 +39,9 @@ int insertIntoParent(int tableId, pagenum_t leftChildPageNum, int64_t newKey, pa
 
 // make root that has left leaf as leftmost child, right leaf as first child
 int insertIntoNewRoot(int tableId, pagenum_t leftLeafPageNum, int64_t newKey, pagenum_t rightLeafPageNum);
-int insertIntoInternal(pagenum_t parentPageNum, int leftChildIndex, int64_t newKey, pagenum_t rightChildPageNum);
-int getIndexOfLeft(pagenum_t parentPageNum, pagenum_t childPageNum);
-int insertIntoInternalAfterSplitting(pagenum_t parentPageNum, int leftChildIndex, int64_t newKey, pagenum_t rightChildPageNum);
+int getIndexOfLeft(int tableId, pagenum_t parentPageNum, pagenum_t childPageNum);
+int insertIntoInternal(int tableId, pagenum_t parentPageNum, int leftChildIndex, int64_t newKey, pagenum_t rightChildPageNum);
+int insertIntoInternalAfterSplitting(int tableId, pagenum_t parentPageNum, int leftChildIndex, int64_t newKey, pagenum_t rightChildPageNum);
 
 int db_find(int tableId, int64_t key, char *ret_val);
 pagenum_t findLeaf(int tableId, int64_t key);
