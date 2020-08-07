@@ -88,9 +88,9 @@ page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
     bufferPage_t* bufferPage = NULL;
     page_t* retPage = NULL;
     int i;
-
+    
     bufferPage = bufferFindBufferPage(tableId, pageNum);
-    // if there's page in the bufferpool
+    // if there's finding page in the bufferpool
     // pin the buffer and return page
     if (bufferPage != NULL) {
         while (bufferPage -> isPinned != 0) {
@@ -106,17 +106,18 @@ page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
 
     // no page in the bufferpool
     // replace (LRU policy)
-    
+    // victim is least recently used bufferpage among not pinned
+
+    // find the first one in the LRU list
     bufferPage  = &bufferPool[0];
+    while( bufferPage -> prev != NULL) {
+        bufferPage = bufferPage -> prev;
+    }
 
-    while(retPage == NULL) {
-        if (bufferPage -> prev == NULL) {
-            if (bufferPage -> isPinned != 0) {
-                while(bufferPage -> isPinned != 0) {
-                    printf("waiting ispinned to be 0\n");
-                }
-            }
-
+    // find the victim following the LRU list
+    while (retPage == NULL) {
+        if (bufferPage -> isPinned == 0) {
+            //found victim
             if (bufferPage -> isDirty) {
                 fd = bufferGetFdOfTable(bufferPage -> tableId);
                 file_write_page(bufferPage -> pageNum, &bufferPage -> page);
@@ -131,9 +132,14 @@ page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
             bufferPage -> tableId = tableId;
 
             updateToMostRecent(bufferPage);
+            return retPage;
+        } else if (bufferPage -> next == NULL){
+            // move to next one
+            printf("[ERROR]: All buffer page is pinned!\n");
+            printf("Fail to replace page\n");
+            exit(EXIT_FAILURE);
         }
-
-        bufferPage = bufferPage -> prev;
+        bufferPage = bufferPage -> next;
     }
 
     return retPage;
