@@ -1,12 +1,50 @@
 #include "index.h"
 #include "buffer.h"
 
+// Insert input ‘key/value’ (record) to data file at the right place.
+// If success, return 0. Otherwise, return non-zero value.
+int db_insert(int tableId, int64_t key, char * value) {
+    page_t* page;
+    pagenum_t leafPageNum;
+    char* tmp = (char*)malloc(sizeof(char) * 120);
 
-// return execution number of open_table
-// open first table: return 1 
-int open_table(char *pathname) {
-    return bufferOpenTable(pathname);
-} 
+    //set fd
+    fd = bufferGetFdOfTable(tableId);
+
+    //check if key is already in the tree
+    if (db_find(tableId, key, tmp) == SUCCESS) {
+        printf("[ERROR]: key is already in the tree\n");
+        printf("[ERROR]: db_insert fail\n");
+        free(tmp);
+        return FAIL;
+    }
+    free(tmp);
+    
+    page = bufferRequestPage(tableId, HEADERPAGENUM);
+
+    //there's no rootpage
+    if (((headerPage_t*)page) -> rootPageNum == 0) {
+        bufferUnpinPage(tableId, HEADERPAGENUM);
+        return startNewTree(tableId, key, value);
+    }
+
+    bufferUnpinPage(tableId, HEADERPAGENUM);
+
+    leafPageNum = findLeaf(tableId, key);
+
+    page = bufferRequestPage(tableId, leafPageNum);
+
+
+    if (((leafPage_t*)page) -> numOfKeys < LEAF_ORDER - 1) {
+        bufferUnpinPage(tableId, leafPageNum);
+        return insertIntoLeaf(tableId, leafPageNum, key, value);
+    }
+
+
+
+    bufferUnpinPage(tableId,leafPageNum);
+    return insertIntoLeafAfterSplitting(tableId, leafPageNum, key, value);
+}
 
 int startNewTree(int tableId, int64_t key, char* value) {
     page_t* page, * header;
@@ -55,11 +93,102 @@ int insertIntoLeaf(int tableId, pagenum_t pageNum, int64_t key, char* value) {
     return SUCCESS;
 }
 
+int insertIntoLeafAfterSplitting(int tableId, pagenum_t oldLeafPageNum, int64_t key, char* value) {
+
+    page_t* newLeaf, * oldLeaf;
+    pagenum_t newLeafPageNum;
+    leafRecord_t* temporaryRecord;
+    int insertionIndex, split, i, j;
+    int64_t newKey;
+
+    temporaryRecord = (leafRecord_t*)malloc(sizeof(struct leafRecord_t) * LEAF_ORDER);
+
+
+    oldLeaf = bufferRequestPage(tableId, oldLeafPageNum);
+
+    insertionIndex = 0;
+    while (insertionIndex < LEAF_ORDER - 1 && ((leafPage_t*)oldLeaf) -> record[insertionIndex].key < key) {
+        insertionIndex++;
+    }
+    for (i = 0, j = 0; i < ((leafPage_t*)oldLeaf) -> numOfKeys; i++, j++) {
+        if (j == insertionIndex) j++;
+        temporaryRecord[j].key = ((leafPage_t*)oldLeaf) ->record[i].key;
+        strcpy(temporaryRecord[j].value, ((leafPage_t*)oldLeaf) ->record[i].value);
+    }
+
+    temporaryRecord[insertionIndex].key = key;
+    strcpy(temporaryRecord[insertionIndex].value, value);
+
+    ((leafPage_t*)oldLeaf) -> numOfKeys = 0;
+    split = cut(LEAF_ORDER - 1);
+
+    for (i = 0; i < split; i++) {
+        ((leafPage_t*)oldLeaf) -> record[i].key = temporaryRecord[i].key;
+        strcpy(((leafPage_t*)oldLeaf) -> record[i].value, temporaryRecord[i].value);
+        (((leafPage_t*)oldLeaf) -> numOfKeys)++;
+    }
+
+    newLeafPageNum = bufferAllocPage(tableId);
+    newLeaf = bufferRequestPage(tableId, newLeafPageNum);
+    ((leafPage_t*)newLeaf) -> parentPageNum = 0;
+    ((leafPage_t*)newLeaf) -> isLeaf = 1;
+    ((leafPage_t*)newLeaf) -> numOfKeys = 0;
+    ((leafPage_t*)newLeaf) -> rightSiblingPageNum = 0;
+
+    for (i = split, j = 0; i < LEAF_ORDER; i++, j++) {
+        ((leafPage_t*)newLeaf) -> record[j].key = temporaryRecord[i].key;
+        strcpy(((leafPage_t*)newLeaf) -> record[j].value, temporaryRecord[i].value);
+        (((leafPage_t*)newLeaf) -> numOfKeys)++;
+    }
+
+    free(temporaryRecord);
+
+    ((leafPage_t*)newLeaf) -> rightSiblingPageNum = ((leafPage_t*)oldLeaf) -> rightSiblingPageNum;
+    ((leafPage_t*)oldLeaf) -> rightSiblingPageNum = newLeafPageNum;
+
+    ((leafPage_t*)newLeaf) -> parentPageNum = ((leafPage_t*)oldLeaf) -> parentPageNum;
+    newKey = ((leafPage_t*)newLeaf) -> record[0].key;
+
+    bufferMakeDirty(tableId, oldLeafPageNum);
+    bufferUnpinPage(tableId, oldLeafPageNum);
+    bufferMakeDirty(tableId, newLeafPageNum);
+    bufferUnpinPage(tableId, newLeafPageNum);
+    return insertIntoParent(tableId, oldLeafPageNum, newKey, newLeafPageNum);
+}
+
 int cut( int length ) {
     if (length % 2 == 0)
         return length/2;
     else
         return length/2 + 1;
+}
+
+int insertIntoParent(int tableId, pagenum_t leftChildPageNum, int64_t newKey, pagenum_t rightChildPageNum) {
+
+    int leftIndex;
+    page_t* leftChild, * parent;
+    pagenum_t parentPageNum;
+
+    leftChild = bufferRequestPage(tableId, leftChildPageNum);
+    parentPageNum = ((leafPage_t*)leftChild) -> parentPageNum;
+    bufferUnpinPage(tableId, leftChildPageNum);
+    //leftChild was rootPage
+    if (parentPageNum == HEADERPAGENUM) {
+        return insertIntoNewRoot(tableId, leftChildPageNum, newKey, rightChildPageNum);
+    }
+    leftIndex = getIndexOfLeft(tableId, parentPageNum, leftChildPageNum);
+
+    parent = bufferRequestPage(tableId, parentPageNum);
+    if (((internalPage_t*)parent) -> numOfKeys < INTERNAL_ORDER - 1) {
+        bufferUnpinPage(tableId, parentPageNum);
+        return insertIntoInternal(tableId, parentPageNum, leftIndex, newKey, rightChildPageNum);
+    }
+    
+    bufferUnpinPage(tableId, parentPageNum);
+    return insertIntoInternalAfterSplitting(tableId, parentPageNum, leftIndex, newKey, rightChildPageNum);
+
+    return SUCCESS;
+
 }
 
 int insertIntoNewRoot(int tableId, pagenum_t leftLeafPageNum, int64_t newKey, pagenum_t rightLeafPageNum) {
@@ -200,139 +329,6 @@ int insertIntoInternalAfterSplitting(int tableId, pagenum_t parentPageNum, int l
 
 
 }
-int insertIntoParent(int tableId, pagenum_t leftChildPageNum, int64_t newKey, pagenum_t rightChildPageNum) {
-
-    int leftIndex;
-    page_t* leftChild, * parent;
-    pagenum_t parentPageNum;
-
-    leftChild = bufferRequestPage(tableId, leftChildPageNum);
-    parentPageNum = ((leafPage_t*)leftChild) -> parentPageNum;
-    bufferUnpinPage(tableId, leftChildPageNum);
-    //leftChild was rootPage
-    if (parentPageNum == HEADERPAGENUM) {
-        return insertIntoNewRoot(tableId, leftChildPageNum, newKey, rightChildPageNum);
-    }
-    leftIndex = getIndexOfLeft(tableId, parentPageNum, leftChildPageNum);
-
-    parent = bufferRequestPage(tableId, parentPageNum);
-    if (((internalPage_t*)parent) -> numOfKeys < INTERNAL_ORDER - 1) {
-        bufferUnpinPage(tableId, parentPageNum);
-        return insertIntoInternal(tableId, parentPageNum, leftIndex, newKey, rightChildPageNum);
-    }
-    
-    bufferUnpinPage(tableId, parentPageNum);
-    return insertIntoInternalAfterSplitting(tableId, parentPageNum, leftIndex, newKey, rightChildPageNum);
-
-    return SUCCESS;
-
-}
-int insertIntoLeafAfterSplitting(int tableId, pagenum_t oldLeafPageNum, int64_t key, char* value) {
-
-    page_t* newLeaf, * oldLeaf;
-    pagenum_t newLeafPageNum;
-    leafRecord_t* temporaryRecord;
-    int insertionIndex, split, i, j;
-    int64_t newKey;
-
-    temporaryRecord = (leafRecord_t*)malloc(sizeof(struct leafRecord_t) * LEAF_ORDER);
-
-
-    oldLeaf = bufferRequestPage(tableId, oldLeafPageNum);
-
-    insertionIndex = 0;
-    while (insertionIndex < LEAF_ORDER - 1 && ((leafPage_t*)oldLeaf) -> record[insertionIndex].key < key) {
-        insertionIndex++;
-    }
-    for (i = 0, j = 0; i < ((leafPage_t*)oldLeaf) -> numOfKeys; i++, j++) {
-        if (j == insertionIndex) j++;
-        temporaryRecord[j].key = ((leafPage_t*)oldLeaf) ->record[i].key;
-        strcpy(temporaryRecord[j].value, ((leafPage_t*)oldLeaf) ->record[i].value);
-    }
-
-    temporaryRecord[insertionIndex].key = key;
-    strcpy(temporaryRecord[insertionIndex].value, value);
-
-    ((leafPage_t*)oldLeaf) -> numOfKeys = 0;
-    split = cut(LEAF_ORDER - 1);
-
-    for (i = 0; i < split; i++) {
-        ((leafPage_t*)oldLeaf) -> record[i].key = temporaryRecord[i].key;
-        strcpy(((leafPage_t*)oldLeaf) -> record[i].value, temporaryRecord[i].value);
-        (((leafPage_t*)oldLeaf) -> numOfKeys)++;
-    }
-
-    newLeafPageNum = bufferAllocPage(tableId);
-    newLeaf = bufferRequestPage(tableId, newLeafPageNum);
-    ((leafPage_t*)newLeaf) -> parentPageNum = 0;
-    ((leafPage_t*)newLeaf) -> isLeaf = 1;
-    ((leafPage_t*)newLeaf) -> numOfKeys = 0;
-    ((leafPage_t*)newLeaf) -> rightSiblingPageNum = 0;
-
-    for (i = split, j = 0; i < LEAF_ORDER; i++, j++) {
-        ((leafPage_t*)newLeaf) -> record[j].key = temporaryRecord[i].key;
-        strcpy(((leafPage_t*)newLeaf) -> record[j].value, temporaryRecord[i].value);
-        (((leafPage_t*)newLeaf) -> numOfKeys)++;
-    }
-
-    free(temporaryRecord);
-
-    ((leafPage_t*)newLeaf) -> rightSiblingPageNum = ((leafPage_t*)oldLeaf) -> rightSiblingPageNum;
-    ((leafPage_t*)oldLeaf) -> rightSiblingPageNum = newLeafPageNum;
-
-    ((leafPage_t*)newLeaf) -> parentPageNum = ((leafPage_t*)oldLeaf) -> parentPageNum;
-    newKey = ((leafPage_t*)newLeaf) -> record[0].key;
-
-    bufferMakeDirty(tableId, oldLeafPageNum);
-    bufferMakeDirty(tableId, newLeafPageNum);
-    bufferUnpinPage(tableId, oldLeafPageNum);
-    bufferUnpinPage(tableId, newLeafPageNum);
-    return insertIntoParent(tableId, oldLeafPageNum, newKey, newLeafPageNum);
-}
-// Insert input ‘key/value’ (record) to data file at the right place.
-// If success, return 0. Otherwise, return non-zero value.
-int db_insert(int tableId, int64_t key, char * value) {
-    page_t* page;
-    pagenum_t leafPageNum;
-    char* tmp = (char*)malloc(sizeof(char) * 120);
-
-    //set fd
-    fd = bufferGetFdOfTable(tableId);
-
-    //check if key is already in the tree
-    if (db_find(tableId, key, tmp) == SUCCESS) {
-        printf("[ERROR]: key is already in the tree\n");
-        printf("[ERROR]: db_insert fail\n");
-        free(tmp);
-        return FAIL;
-    }
-    free(tmp);
-    
-    page = bufferRequestPage(tableId, HEADERPAGENUM);
-
-    //there's no rootpage
-    if (((headerPage_t*)page) -> rootPageNum == 0) {
-        bufferUnpinPage(tableId, HEADERPAGENUM);
-        return startNewTree(tableId, key, value);
-    }
-
-    bufferUnpinPage(tableId, HEADERPAGENUM);
-
-    leafPageNum = findLeaf(tableId, key);
-
-    page = bufferRequestPage(tableId, leafPageNum);
-
-
-    if (((leafPage_t*)page) -> numOfKeys < LEAF_ORDER - 1) {
-        bufferUnpinPage(tableId, leafPageNum);
-        return insertIntoLeaf(tableId, leafPageNum, key, value);
-    }
-
-
-
-    bufferUnpinPage(tableId,leafPageNum);
-    return insertIntoLeafAfterSplitting(tableId, leafPageNum, key, value);
-}
 
 // Find the record containing input ‘key’.
 // • If found matching ‘key’, store matched ‘value’ string in ret_val and return 0. Otherwise, return
@@ -468,71 +464,103 @@ int deleteEntry(int tableId, pagenum_t pageNum, int64_t key) {
     return SUCCESS; 
 }
 
-int redistributePages(int tableId, pagenum_t neighborPageNum, int64_t kPrime, pagenum_t pageNum, int neighborIndex, int kPrimeIndex) {
-    // execute only when page is internal
-
+void removeEntryFromPage(int tableId, pagenum_t pageNum, int64_t key) {
+    page_t* page;
     int i;
-    int64_t newKPrime;
-    page_t* child, * neighbor, * page, * parent;
-    pagenum_t childPageNum, parentPageNum;
+    i = 0;
 
-    // TODO: check  page's numkey == 0
-    // if (((internalPage_t*)page) -> numOfKeys != 0) {
-    //     printf("something's wrong \n");
-    //     return FAIL;
-    // }
     page = bufferRequestPage(tableId, pageNum);
-    neighbor = bufferRequestPage(tableId, neighborPageNum);
-
-    // move one from neighbor to page 
-    if (neighborIndex == -2) {
-        // neighbor is right child, page is leftmostchild
-
-        ((internalPage_t*)page) -> record[((internalPage_t*)page) -> numOfKeys].key = kPrime;
-        ((internalPage_t*)page) -> record[((internalPage_t*)page) -> numOfKeys].pageNum = ((internalPage_t*)neighbor) -> leftMostPageNum;
-        ((internalPage_t*)neighbor) -> leftMostPageNum = ((internalPage_t*)neighbor) -> record[0].pageNum;
-        childPageNum = ((internalPage_t*)page) -> record[((internalPage_t*)page) -> numOfKeys].pageNum;
-        parentPageNum = ((internalPage_t*)page) -> parentPageNum;
-        newKPrime = ((internalPage_t*)neighbor) -> record[0].key;
-
-        for (i = 0; i < ((internalPage_t*)neighbor) -> numOfKeys; i++) {
-            ((internalPage_t*)neighbor) -> record[i].key = ((internalPage_t*)neighbor) -> record[i + 1].key;
-            ((internalPage_t*)neighbor) -> record[i].pageNum = ((internalPage_t*)neighbor) -> record[i + 1].pageNum;
+    if (((internalPage_t*)page) -> isLeaf) {
+        while (((leafPage_t*)page) -> record[i].key != key) {
+            i++;
         }
-
+        for (++i; i < ((leafPage_t*)page) -> numOfKeys; i++) {
+            ((leafPage_t*)page) -> record[i - 1].key = ((leafPage_t*)page) -> record[i].key;
+            strcpy(((leafPage_t*)page) -> record[i - 1].value, ((leafPage_t*)page) -> record[i].value);
+        }
     } else {
-        // neighbor is leftChild, page is rightChild
-        
-        for(i = 0; i  < ((internalPage_t*)page) -> numOfKeys; i++) {
-            ((internalPage_t*)page) -> record[i + 1].key = ((internalPage_t*)page) -> record[i].key;
-            ((internalPage_t*)page) -> record[i + 1].pageNum = ((internalPage_t*)page) -> record[i].pageNum;
+        while (((internalPage_t*)page) -> record[i].key != key) {
+            i++;
         }
-        ((internalPage_t*)page) -> record[0].key = kPrime;
-        ((internalPage_t*)page) -> record[0].pageNum = ((internalPage_t*)page) -> leftMostPageNum;
-        ((internalPage_t*)page) -> leftMostPageNum = ((internalPage_t*)neighbor) -> record[((internalPage_t*)neighbor) -> numOfKeys - 1].pageNum;
-        childPageNum = ((internalPage_t*)page) -> leftMostPageNum;
-        parentPageNum = ((internalPage_t*)page) -> parentPageNum;
-        newKPrime = ((internalPage_t*)neighbor) -> record[((internalPage_t*)neighbor) -> numOfKeys - 1].key;
-        
-    } 
-    (((internalPage_t*)page) -> numOfKeys)++;
-    (((internalPage_t*)neighbor) -> numOfKeys)--;
-    bufferMakeDirty(tableId, neighborPageNum);
-    bufferUnpinPage(tableId, neighborPageNum);
+        for (++i; i < ((internalPage_t*)page) -> numOfKeys; i++) {
+            ((internalPage_t*)page) -> record[i - 1].key = ((internalPage_t*)page) -> record[i].key;
+            ((internalPage_t*)page) -> record[i - 1].pageNum = ((internalPage_t*)page) -> record[i].pageNum;
+        }
+    }
+    (((internalPage_t*)page) -> numOfKeys)--;
     bufferMakeDirty(tableId, pageNum);
     bufferUnpinPage(tableId, pageNum);
+}
 
-    child = bufferRequestPage(tableId, childPageNum);
-    ((internalPage_t*)child) -> parentPageNum = pageNum;
-    bufferMakeDirty(tableId, childPageNum);
-    bufferUnpinPage(tableId, childPageNum);
+int adjustRoot(int tableId, pagenum_t pageNum) {
+    page_t* page, * header, * child;
+    pagenum_t childPageNum;
+
+    page = bufferRequestPage(tableId, pageNum);
+
+    if (((internalPage_t*)page) -> numOfKeys > 0) {
+        bufferUnpinPage(tableId,pageNum);
+        return SUCCESS;
+    }
+
+    if (((internalPage_t*)page) -> isLeaf) {
+        bufferUnpinPage(tableId,pageNum);
+        header = bufferRequestPage(tableId, HEADERPAGENUM);
+        ((headerPage_t*)header) -> rootPageNum = 0;
+        bufferMakeDirty(tableId, HEADERPAGENUM);
+        bufferUnpinPage(tableId, HEADERPAGENUM);
+        bufferFreePage(tableId,pageNum);
+        return SUCCESS;
+    } else {
+        childPageNum = ((internalPage_t*)page) -> leftMostPageNum;
+        bufferUnpinPage(tableId,pageNum);
+        bufferFreePage(tableId, pageNum);
+
+        header = bufferRequestPage(tableId, HEADERPAGENUM);
+        ((headerPage_t*)header) -> rootPageNum = ((internalPage_t*)page) -> leftMostPageNum;
+        bufferMakeDirty(tableId, HEADERPAGENUM);
+        bufferUnpinPage(tableId, HEADERPAGENUM);
+
+        child = bufferRequestPage(tableId, childPageNum);
+        ((internalPage_t*)child) -> parentPageNum = 0;
+        bufferMakeDirty(tableId, childPageNum);
+        bufferUnpinPage(tableId, childPageNum);
+        return SUCCESS;
+    }
+}
+
+// return pageNum's left one's index at parent,  if page is leftmost return - 2
+int getNeighborIndex(int tableId, pagenum_t pageNum) {
+    pagenum_t parentPageNum;
+    page_t* parent, * page;
+    int i;
+
+
+    page = bufferRequestPage(tableId, pageNum);
+    parentPageNum = ((internalPage_t*)page) -> parentPageNum;
+    bufferUnpinPage(tableId, pageNum);
 
     parent = bufferRequestPage(tableId, parentPageNum);
-    ((internalPage_t*)parent) -> record[kPrimeIndex].key = newKPrime;
-    bufferMakeDirty(tableId, parentPageNum);
+    if (((internalPage_t*)parent) -> leftMostPageNum == pageNum) {
+        bufferUnpinPage(tableId, parentPageNum);
+        return -2;
+    }
+
+    for (i = 0; i < ((internalPage_t*)parent) -> numOfKeys; i++) {
+        if (((internalPage_t*)parent) -> record[i].pageNum == pageNum) {
+            bufferUnpinPage(tableId, parentPageNum);
+            return i - 1;
+        }
+    }
+
+
+
+    printf("[ERROR]: getNeighborIndex fail");
     bufferUnpinPage(tableId, parentPageNum);
-    return SUCCESS;
+    return -3;
+
 }
+
 //move right keys to left
 int coalescePages(int tableId, pagenum_t neighborPageNum , int64_t kPrime, pagenum_t pageNum, int neighborIndex) {
     pagenum_t leftPageNum, rightPageNum, parentPageNum, childPageNum;
@@ -602,103 +630,79 @@ int coalescePages(int tableId, pagenum_t neighborPageNum , int64_t kPrime, pagen
     return deleteEntry(tableId, parentPageNum, kPrime);
 }
 
-// return pageNum's left one's index at parent,  if page is leftmost return - 2
-int getNeighborIndex(int tableId, pagenum_t pageNum) {
-    pagenum_t parentPageNum;
-    page_t* parent, * page;
+
+
+int redistributePages(int tableId, pagenum_t neighborPageNum, int64_t kPrime, pagenum_t pageNum, int neighborIndex, int kPrimeIndex) {
+    // execute only when page is internal
+
     int i;
+    int64_t newKPrime;
+    page_t* child, * neighbor, * page, * parent;
+    pagenum_t childPageNum, parentPageNum;
 
-
+    // TODO: check  page's numkey == 0
+    // if (((internalPage_t*)page) -> numOfKeys != 0) {
+    //     printf("something's wrong \n");
+    //     return FAIL;
+    // }
     page = bufferRequestPage(tableId, pageNum);
-    parentPageNum = ((internalPage_t*)page) -> parentPageNum;
-    bufferUnpinPage(tableId, pageNum);
+    neighbor = bufferRequestPage(tableId, neighborPageNum);
 
-    parent = bufferRequestPage(tableId, parentPageNum);
-    if (((internalPage_t*)parent) -> leftMostPageNum == pageNum) {
-        bufferUnpinPage(tableId, parentPageNum);
-        return -2;
-    }
+    // move one from neighbor to page 
+    if (neighborIndex == -2) {
+        // neighbor is right child, page is leftmostchild
 
-    for (i = 0; i < ((internalPage_t*)parent) -> numOfKeys; i++) {
-        if (((internalPage_t*)parent) -> record[i].pageNum == pageNum) {
-            bufferUnpinPage(tableId, parentPageNum);
-            return i - 1;
+        ((internalPage_t*)page) -> record[((internalPage_t*)page) -> numOfKeys].key = kPrime;
+        ((internalPage_t*)page) -> record[((internalPage_t*)page) -> numOfKeys].pageNum = ((internalPage_t*)neighbor) -> leftMostPageNum;
+        ((internalPage_t*)neighbor) -> leftMostPageNum = ((internalPage_t*)neighbor) -> record[0].pageNum;
+        childPageNum = ((internalPage_t*)page) -> record[((internalPage_t*)page) -> numOfKeys].pageNum;
+        parentPageNum = ((internalPage_t*)page) -> parentPageNum;
+        newKPrime = ((internalPage_t*)neighbor) -> record[0].key;
+
+        for (i = 0; i < ((internalPage_t*)neighbor) -> numOfKeys; i++) {
+            ((internalPage_t*)neighbor) -> record[i].key = ((internalPage_t*)neighbor) -> record[i + 1].key;
+            ((internalPage_t*)neighbor) -> record[i].pageNum = ((internalPage_t*)neighbor) -> record[i + 1].pageNum;
         }
-    }
 
-
-
-    printf("[ERROR]: getNeighborIndex fail");
-    bufferUnpinPage(tableId, parentPageNum);
-    return -3;
-
-}
-void removeEntryFromPage(int tableId, pagenum_t pageNum, int64_t key) {
-    page_t* page;
-    int i;
-    i = 0;
-
-    page = bufferRequestPage(tableId, pageNum);
-    if (((internalPage_t*)page) -> isLeaf) {
-        while (((leafPage_t*)page) -> record[i].key != key) {
-            i++;
-        }
-        for (++i; i < ((leafPage_t*)page) -> numOfKeys; i++) {
-            ((leafPage_t*)page) -> record[i - 1].key = ((leafPage_t*)page) -> record[i].key;
-            strcpy(((leafPage_t*)page) -> record[i - 1].value, ((leafPage_t*)page) -> record[i].value);
-        }
     } else {
-        while (((internalPage_t*)page) -> record[i].key != key) {
-            i++;
+        // neighbor is leftChild, page is rightChild
+        
+        for(i = 0; i  < ((internalPage_t*)page) -> numOfKeys; i++) {
+            ((internalPage_t*)page) -> record[i + 1].key = ((internalPage_t*)page) -> record[i].key;
+            ((internalPage_t*)page) -> record[i + 1].pageNum = ((internalPage_t*)page) -> record[i].pageNum;
         }
-        for (++i; i < ((internalPage_t*)page) -> numOfKeys; i++) {
-            ((internalPage_t*)page) -> record[i - 1].key = ((internalPage_t*)page) -> record[i].key;
-            ((internalPage_t*)page) -> record[i - 1].pageNum = ((internalPage_t*)page) -> record[i].pageNum;
-        }
-    }
-    (((internalPage_t*)page) -> numOfKeys)--;
+        ((internalPage_t*)page) -> record[0].key = kPrime;
+        ((internalPage_t*)page) -> record[0].pageNum = ((internalPage_t*)page) -> leftMostPageNum;
+        ((internalPage_t*)page) -> leftMostPageNum = ((internalPage_t*)neighbor) -> record[((internalPage_t*)neighbor) -> numOfKeys - 1].pageNum;
+        childPageNum = ((internalPage_t*)page) -> leftMostPageNum;
+        parentPageNum = ((internalPage_t*)page) -> parentPageNum;
+        newKPrime = ((internalPage_t*)neighbor) -> record[((internalPage_t*)neighbor) -> numOfKeys - 1].key;
+        
+    } 
+    (((internalPage_t*)page) -> numOfKeys)++;
+    (((internalPage_t*)neighbor) -> numOfKeys)--;
+    bufferMakeDirty(tableId, neighborPageNum);
+    bufferUnpinPage(tableId, neighborPageNum);
     bufferMakeDirty(tableId, pageNum);
     bufferUnpinPage(tableId, pageNum);
+
+    child = bufferRequestPage(tableId, childPageNum);
+    ((internalPage_t*)child) -> parentPageNum = pageNum;
+    bufferMakeDirty(tableId, childPageNum);
+    bufferUnpinPage(tableId, childPageNum);
+
+    parent = bufferRequestPage(tableId, parentPageNum);
+    ((internalPage_t*)parent) -> record[kPrimeIndex].key = newKPrime;
+    bufferMakeDirty(tableId, parentPageNum);
+    bufferUnpinPage(tableId, parentPageNum);
+    return SUCCESS;
 }
 
-int adjustRoot(int tableId, pagenum_t pageNum) {
-    page_t* page, * header, * child;
-    pagenum_t childPageNum;
-
-    page = bufferRequestPage(tableId, pageNum);
-
-    if (((internalPage_t*)page) -> numOfKeys > 0) {
-        bufferUnpinPage(tableId,pageNum);
-        return SUCCESS;
-    }
-
-    if (((internalPage_t*)page) -> isLeaf) {
-        bufferUnpinPage(tableId,pageNum);
-        header = bufferRequestPage(tableId, HEADERPAGENUM);
-        ((headerPage_t*)header) -> rootPageNum = 0;
-        bufferMakeDirty(tableId, HEADERPAGENUM);
-        bufferUnpinPage(tableId, HEADERPAGENUM);
-        bufferFreePage(tableId,pageNum);
-        return SUCCESS;
-    } else {
-        childPageNum = ((internalPage_t*)page) -> leftMostPageNum;
-        bufferUnpinPage(tableId,pageNum);
-        bufferFreePage(tableId, pageNum);
-
-        header = bufferRequestPage(tableId, HEADERPAGENUM);
-        ((headerPage_t*)header) -> rootPageNum = ((internalPage_t*)page) -> leftMostPageNum;
-        bufferMakeDirty(tableId, HEADERPAGENUM);
-        bufferUnpinPage(tableId, HEADERPAGENUM);
-
-        child = bufferRequestPage(tableId, childPageNum);
-        ((internalPage_t*)child) -> parentPageNum = 0;
-        bufferMakeDirty(tableId, childPageNum);
-        bufferUnpinPage(tableId, childPageNum);
-        return SUCCESS;
-    }
-}
-
-
+// return execution number of open_table
+// open first table: return 1 
+int open_table(char *pathname) {
+    return bufferOpenTable(pathname);
+} 
 
 int init_db(int buf_num) {
     return bufferInitDb(buf_num);
