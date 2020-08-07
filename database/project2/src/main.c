@@ -27,8 +27,8 @@ void printFreePageList();
 void printHeader(pagenum_t headerPageNum);
 void printInternal(pagenum_t internalPageNum);
 void printLeaf(pagenum_t leafPageNum);
-void printDb();
-void printTree();
+void printDb(int tableId);
+void printTree(int tableId);
 
 pageNode* queue = NULL;
 void enqueue( pageNode * new_node);
@@ -39,7 +39,7 @@ void listRemoveKey(list* list, int key);
 int listGetRandomKey(list* list);
 int listIsKeyExist(list* list, int key);
 
-void test();
+void test(int numOfTable, int testNum);
 
 void printLRUList();
 void printBufferPool();
@@ -49,12 +49,13 @@ void printTables();
 // MAIN
 int main( int argc, char ** argv ) {
 
-    open_table("db");
-    init_db(3);
+    open_table("db_table0");
+    open_table("db_table1");
+    init_db(10);
     tests();
-    test();
-    test();
-    test();
+    test(2, 1000);
+    test(2, 1000);
+    // test(1, 1000);
     int inputTableId;
     int input_key;
     char input_value[120];
@@ -98,8 +99,10 @@ int main( int argc, char ** argv ) {
             break;
         }
         while (getchar() != (int)'\n');
-        printDb();
-        printTree();
+        printDb(1);
+        printTree(1);
+        printDb(2);
+        printTree(2);
         printTables();
         printBufferPool();
         printf("======================================================================\n");
@@ -111,81 +114,100 @@ int main( int argc, char ** argv ) {
 
 
 
-void test() {
+void test(int numOfTable, int testNum) {
 //for test
-    list testInput;
-    list testInputted;
+    list* testInput;
+    list* testInputted;
     
-    int testNum;
 
     srand(time(NULL));
 
     //test constants
-    testNum = 1000;
     int keyRange = testNum * 100;
 
-    testInput.keys = (int*)malloc(sizeof(int) * testNum);
-    testInputted.keys = (int*)malloc(sizeof(int) * testNum);
-    testInput.numOfKeys = 0;
-    testInputted.numOfKeys = 0;
-    
-    // make testInput 
-    int count = testNum;
-    int randomKey = rand() % keyRange;
-    while (count > 0) {
-        if (listIsKeyExist(&testInput, randomKey) == SUCCESS) {
-            randomKey = rand() % keyRange;
-            continue;
-        } else {
-            listAddKey(&testInput, randomKey);
-            randomKey = rand() % keyRange;
-            count--;
+    testInput = (list*)malloc(sizeof(struct list) * numOfTable);
+    testInputted = (list*)malloc(sizeof(struct list) * numOfTable);
+
+    for (int i = 0; i < numOfTable; i++){
+        testInput[i].keys = (int*)malloc(sizeof(int) * testNum);
+        testInputted[i].keys = (int*)malloc(sizeof(int) * testNum);
+        testInput[i].numOfKeys = 0;
+        testInputted[i].numOfKeys = 0;
+        // make testInput 
+        int count = testNum;
+        int randomKey = rand() % keyRange;
+        while (count > 0) {
+            if (listIsKeyExist(&testInput[i], randomKey) == SUCCESS) {
+                randomKey = rand() % keyRange;
+                continue;
+            } else {
+                listAddKey(&testInput[i], randomKey);
+                randomKey = rand() % keyRange;
+                count--;
+            }
+        }
+        printf("testInput[%d]: [", i);
+        for(int j = 0; j < testInput[i].numOfKeys; j++){
+            printf("%d, ", testInput[i].keys[j]);
         }
     }
-    printf("testInput: [");
-    for (int i = 0; i < testInput.numOfKeys; i++) {
-        printf("%d, ", testInput.keys[i]);
-    }
-    printf("]\n");
-
+        printf("]\n");
+    
+    int targetTableIndex;
+    int targetTableId;
+    int numOfDoneTable = 0;
     //do test
-    while (testInput.numOfKeys > 0 || testInputted.numOfKeys != 0) {
-
+    while (1) {
+        numOfDoneTable = 0;
+        for(int i = 0; i < numOfTable; i++) {
+            if (testInput[i].numOfKeys == 0 && testInputted[i].numOfKeys == 0) {
+                numOfDoneTable++;
+            }
+        }
+        if (numOfDoneTable == numOfTable) {
+            for (int i = 0; i < numOfTable; i++) {
+                free(testInput[i].keys);
+                free(testInputted[i].keys);
+            }
+            free(testInput);
+            free(testInputted);
+            return;
+        }
+        
+        targetTableIndex = rand() % numOfTable;
+        targetTableId = tables[targetTableIndex].tableId;
         // decide input or delete
         if(rand() % 2 == 0) {
-            if (testInput.numOfKeys == 0) {
+            if (testInput[targetTableIndex].numOfKeys == 0) {
                 continue;
             }
             //input
-            int key = listGetRandomKey(&testInput);
-            printf("[TEST]: Insert %d\n", key);
-            db_insert(1, key, "value");
-            listRemoveKey(&testInput, key);
-            listAddKey(&testInputted, key);
-            printDb();
-            printTree();
+            int key = listGetRandomKey(&testInput[targetTableIndex]);
+            printf("[TEST]: Insert %d at tableId: %d\n", key, targetTableId);
+            db_insert(targetTableId, key, "value");
+            listRemoveKey(&testInput[targetTableIndex], key);
+            listAddKey(&testInputted[targetTableIndex], key);
+            // printDb(targetTableId);
+            // printTree(targetTableId);
             printBufferPool();
         } else {
             //delete
 
             //there's no key in tree
-            if (testInputted.numOfKeys == 0) {
+            if (testInputted[targetTableIndex].numOfKeys == 0) {
                 continue;
             } else {
-                int key = listGetRandomKey(&testInputted);
-                printf("[TEST]: Delete %d\n", key);
-                listRemoveKey(&testInputted, key);
-                db_delete(1, key);
-                printDb();
-                printTree();
+                int key = listGetRandomKey(&testInputted[targetTableIndex]);
+                printf("[TEST]: Delete %d at tableId: %d\n", key, targetTableId);
+                listRemoveKey(&testInputted[targetTableIndex], key);
+                db_delete(targetTableId, key);
+                // printDb(targetTableId);
+                // printTree(targetTableId);
                 printBufferPool();
             }
         }
 
     }
-
-    free(testInput.keys);
-    free(testInputted.keys);
 
     //test end
 }
@@ -271,11 +293,13 @@ pageNode * dequeue( void ) {
     return n;
 }
 
-void printTree() {
+void printTree(int tableId) {
+    fd = bufferGetFdOfTable(tableId);
     page_t header;
     file_read_page(HEADERPAGENUM, &header);
     pagenum_t rootPageNum = ((headerPage_t*)&header) ->rootPageNum;
     printf("=======================================PRINTTREESTART=======================================\n");
+    printf("tableId: %d\n", tableId);
     pageNode root = {.pageNum = rootPageNum, .next = NULL};
 
     printHeader(HEADERPAGENUM);
@@ -311,8 +335,10 @@ void printTree() {
     printf("=======================================PRINTTREEEND=======================================\n");
 }
 
-void printDb() {
+void printDb(int tableId) {
+    fd = bufferGetFdOfTable(tableId);
     printf("=======================================PRINTDB=======================================\n");
+    printf("tableId: %d\n", tableId);
     page_t* page = (page_t*)malloc(sizeof(struct page_t));
     pagenum_t pageNum = 0;
     uint64_t numOfPages;
