@@ -50,7 +50,7 @@ void printTables();
 int main( int argc, char ** argv ) {
 
     open_table("db");
-    init_db(10);
+    init_db(3);
     tests();
     test();
     test();
@@ -121,7 +121,7 @@ void test() {
     srand(time(NULL));
 
     //test constants
-    testNum = 10000;
+    testNum = 1000;
     int keyRange = testNum * 100;
 
     testInput.keys = (int*)malloc(sizeof(int) * testNum);
