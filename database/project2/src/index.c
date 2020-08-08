@@ -700,18 +700,33 @@ int redistributePages(int tableId, pagenum_t neighborPageNum, int64_t kPrime, pa
 
 // return execution number of open_table
 // open first table: return 1 
+// Open existing data file or create one if not existed. 
+// You can give same table id when db opens same table more than once after init_db.
+// • If success, return the unique table id, which represents 
+// the own table in this database. (Return negative value if error occurs)
+// • You have to maintain a table id once open_table() is called, 
+// which is matching file descriptor or file pointer depending on your 
+// previous implementation. (table id ≥ 1 and maximum
+// allocated id is set to 10)
 int open_table(char *pathname) {
     return bufferOpenTable(pathname);
 } 
 
+// Allocate the buffer pool (array) with the given number of entries.
+// • Initialize other fields (state info, LRU info..) with your own design.
+// • If success, return 0. Otherwise, return non-zero value.
 int init_db(int buf_num) {
     return bufferInitDb(buf_num);
 }
 
+// Write all pages of this table from buffer to disk and discard the table id.
+// • If success, return 0. Otherwise, return non-zero value.
 int close_table(int table_id) {
     return bufferCloseTable(table_id);
 }
 
+// Flush all data from buffer and destroy allocated buffer.
+// • If success, return 0. Otherwise, return non-zero value.
 int shutdown_db() {
     return bufferShutDownDb();
 }
