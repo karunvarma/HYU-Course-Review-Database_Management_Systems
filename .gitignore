@@ -4,3 +4,4 @@ database/**/main
 database/**/main.exe
 .vscode
 db
+db_table*
