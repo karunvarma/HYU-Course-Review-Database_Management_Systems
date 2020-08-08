@@ -1,27 +1,27 @@
-.SUFFIXES: .c .o
+.SUFFIXES: .cc .o
 
-CC=gcc
+CC=g++
 
 SRCDIR=src/
 INC=include/
 LIBS=lib/
 
 # main source file
-TARGET_SRC:=$(SRCDIR)main.c
+TARGET_SRC:=$(SRCDIR)main.cc
 TARGET_OBJ:=$(SRCDIR)main.o
 
 # Include more files if you write another source file.
-SRCS_FOR_LIB:=$(SRCDIR)index.c $(SRCDIR)file.c $(SRCDIR)tests.c $(SRCDIR)buffer.c
-OBJS_FOR_LIB:=$(SRCS_FOR_LIB:.c=.o)
+SRCS_FOR_LIB:=$(SRCDIR)index.cc $(SRCDIR)file.cc $(SRCDIR)tests.cc $(SRCDIR)buffer.cc
+OBJS_FOR_LIB:=$(SRCS_FOR_LIB:.cc=.o)
 
-CFLAGS+= -g -fPIC -I $(INC)
+CXXFLAGS+= -g -fPIC -I $(INC)
 
 TARGET=main
 	
 all: $(TARGET)
 $(TARGET): $(TARGET_OBJ)
 	make static_library
-	$(CC) $(CFLAGS) -o $@ $^ -L $(LIBS) -lbpt
+	$(CC) $(CXXFLAGS) -o $@ $^ -L $(LIBS) -lbpt
 
 clean:
 	rm -f $(TARGET) $(TARGET).exe $(TARGET_OBJ) $(OBJS_FOR_LIB) $(LIBS)*.a db_table*

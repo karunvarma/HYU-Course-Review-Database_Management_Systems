@@ -1,5 +1,6 @@
-#include "index.h"
-#include "buffer.h"
+#include "../include/index.h"
+#include <string>
+
 
 // Insert input ‘key/value’ (record) to data file at the right place.
 // If success, return 0. Otherwise, return non-zero value.
@@ -729,4 +730,122 @@ int close_table(int table_id) {
 // • If success, return 0. Otherwise, return non-zero value.
 int shutdown_db() {
     return bufferShutDownDb();
+}
+
+// Because tree is already sorted by key, do sort-merge join
+int join_table(int table_id_1, int table_id_2, char * pathname) {
+    page_t* pageOfTable1, * pageOfTable2;
+    pagenum_t prevPageNumOfTable1, pageNumOfTable1, prevPageNumOfTable2, pageNumOfTable2, markPageNum;
+
+    int joinResultFd;
+    if ((joinResultFd = open(pathname, O_RDWR | O_CREAT | O_EXCL, 0644)) > 0) {
+    } else {
+        joinResultFd = open(pathname, O_RDWR | O_TRUNC);
+    }
+    int i, j, iMark, jMark;
+    pageNumOfTable1 = findLeaf(table_id_1, INT64_MIN);
+    if (pageNumOfTable1 == 0) {
+        //no leaf page at all
+        close(joinResultFd);
+        return FAIL;
+    }
+    pageOfTable1 = bufferRequestPage(table_id_1, pageNumOfTable1);
+    pageNumOfTable2 = findLeaf(table_id_2, ((leafPage_t*)pageOfTable1) -> record[0].key);
+    if (pageNumOfTable2 == 0) {
+        bufferUnpinPage(table_id_1, pageNumOfTable1);
+        close(joinResultFd);
+        return FAIL;
+    }
+    pageOfTable2 = bufferRequestPage(table_id_2, pageNumOfTable2);
+    int done = 0;
+    i = 0;
+    j = 0;
+
+    //TODO: check tree is empty
+
+    while (!done) {
+        while (((leafPage_t*)pageOfTable1) -> record[i].key > ((leafPage_t*)pageOfTable2) -> record[j].key) {
+            if (j == ((leafPage_t*)pageOfTable2) -> numOfKeys - 1) {
+                j = 0;
+                prevPageNumOfTable2 = pageNumOfTable2;
+                pageNumOfTable2 = ((leafPage_t*)pageOfTable2) -> rightSiblingPageNum;
+                bufferUnpinPage(table_id_2, prevPageNumOfTable2);
+                if (pageNumOfTable2 == 0) {
+                    bufferUnpinPage(table_id_1, pageNumOfTable1);
+                    close(joinResultFd);
+                    return SUCCESS;
+                }
+                pageOfTable2 = bufferRequestPage(table_id_2, pageNumOfTable2);
+            } else {
+                j++;
+            }
+        }
+        while (((leafPage_t*)pageOfTable1) -> record[i].key < ((leafPage_t*)pageOfTable2) -> record[j].key) {
+            if (i == ((leafPage_t*)pageOfTable1) -> numOfKeys - 1) {
+                i = 0;
+                prevPageNumOfTable1 = pageNumOfTable1;
+                pageNumOfTable1 = ((leafPage_t*)pageOfTable1) -> rightSiblingPageNum;
+                bufferUnpinPage(table_id_1, prevPageNumOfTable1);
+                if (pageNumOfTable1 == 0) {
+                    bufferUnpinPage(table_id_2, pageNumOfTable2);
+                    close(joinResultFd);
+                    return SUCCESS;
+                }
+                pageOfTable1 = bufferRequestPage(table_id_1, pageNumOfTable1);
+            } else {
+                i++;
+            }
+        }
+        jMark = j;
+        markPageNum = pageNumOfTable2;
+        // below while loops are examined only once each, 
+        // because key is unique in my tree
+        while (((leafPage_t*)pageOfTable1) -> record[i].key == ((leafPage_t*)pageOfTable2) -> record[j].key) {
+            while(((leafPage_t*)pageOfTable1) -> record[i].key == ((leafPage_t*)pageOfTable2) -> record[j].key) {
+                std::string tmp = std::to_string(((leafPage_t*)pageOfTable1) -> record[i].key) + "," 
+                + ((leafPage_t*)pageOfTable1) -> record[i].value + ","
+                + std::to_string(((leafPage_t*)pageOfTable2) -> record[j].key) + ","
+                + ((leafPage_t*)pageOfTable2) -> record[j].value + "\n";
+                write(joinResultFd, (char*)tmp.c_str(), tmp.size());
+                if (j == ((leafPage_t*)pageOfTable2) -> numOfKeys - 1) {
+                    j = 0;
+                    prevPageNumOfTable2 = pageNumOfTable2;
+                    pageNumOfTable2 = ((leafPage_t*)pageOfTable2) -> rightSiblingPageNum;
+                    bufferUnpinPage(table_id_2, prevPageNumOfTable2);
+                    if (pageNumOfTable2 == 0) {
+                        bufferUnpinPage(table_id_1, pageNumOfTable1);
+                        close(joinResultFd);
+                        return SUCCESS;
+                    }
+                    pageOfTable2 = bufferRequestPage(table_id_2, pageNumOfTable2);
+                } else {
+                    j++;
+                }
+            }
+
+            j = jMark;
+            if (pageNumOfTable2 != markPageNum) {
+                bufferUnpinPage(table_id_2, pageNumOfTable2);
+                pageNumOfTable2 = markPageNum;
+                pageOfTable2 = bufferRequestPage(table_id_2, pageNumOfTable2);
+            }
+
+            if (i == ((leafPage_t*)pageOfTable1) -> numOfKeys - 1) {
+                i = 0;
+                prevPageNumOfTable1 = pageNumOfTable1;
+                pageNumOfTable1 = ((leafPage_t*)pageOfTable1) -> rightSiblingPageNum;
+                bufferUnpinPage(table_id_1, prevPageNumOfTable1);
+                if (pageNumOfTable1 == 0) {
+                    bufferUnpinPage(table_id_2, pageNumOfTable2);
+                    close(joinResultFd);
+                    return SUCCESS;
+                }
+                pageOfTable1 = bufferRequestPage(table_id_1, pageNumOfTable1);
+            } else {
+                i++;
+            }
+
+        }
+
+    }
 }

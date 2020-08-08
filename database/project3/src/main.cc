@@ -1,4 +1,4 @@
-#include "index.h"
+#include "../include/index.h"
 #include "file.h"
 #include "tests.h"
 #include "buffer.h"
@@ -54,9 +54,10 @@ int main( int argc, char ** argv ) {
     init_db(10);
     tests();
     test(2, 1000);
-    test(2, 1000);
+    // test(2, 1000);
     // test(1, 1000);
     int inputTableId;
+    int inputTableId2;
     int input_key;
     char input_value[120];
     char instruction;
@@ -94,7 +95,11 @@ int main( int argc, char ** argv ) {
             shutdown_db();
             init_db(10);
             break;
-
+        case 'j':
+            scanf("%d", &inputTableId);
+            scanf("%d", &inputTableId2);
+            join_table(inputTableId, inputTableId2, "joinResult.txt");
+            break;
         default:
             break;
         }
@@ -123,7 +128,7 @@ void test(int numOfTable, int testNum) {
     srand(time(NULL));
 
     //test constants
-    int keyRange = testNum * 100;
+    int keyRange = testNum * 10;
 
     testInput = (list*)malloc(sizeof(struct list) * numOfTable);
     testInputted = (list*)malloc(sizeof(struct list) * numOfTable);
@@ -177,19 +182,21 @@ void test(int numOfTable, int testNum) {
         targetTableIndex = rand() % numOfTable;
         targetTableId = tables[targetTableIndex].tableId;
         // decide input or delete
-        if(rand() % 2 == 0) {
+        if(rand() % 3 != 0) {
             if (testInput[targetTableIndex].numOfKeys == 0) {
                 continue;
             }
             //input
             int key = listGetRandomKey(&testInput[targetTableIndex]);
             printf("[TEST]: Insert %d at tableId: %d\n", key, targetTableId);
-            db_insert(targetTableId, key, "value");
+            std::string tmp = "tableId: " + std::to_string(targetTableId) + "key: " + std::to_string(key);
+
+            db_insert(targetTableId, key, (char*)tmp.c_str());
             listRemoveKey(&testInput[targetTableIndex], key);
             listAddKey(&testInputted[targetTableIndex], key);
             // printDb(targetTableId);
             // printTree(targetTableId);
-            printBufferPool();
+            // printBufferPool();
         } else {
             //delete
 
@@ -198,14 +205,16 @@ void test(int numOfTable, int testNum) {
                 continue;
             } else {
                 int key = listGetRandomKey(&testInputted[targetTableIndex]);
+
                 printf("[TEST]: Delete %d at tableId: %d\n", key, targetTableId);
                 listRemoveKey(&testInputted[targetTableIndex], key);
                 db_delete(targetTableId, key);
                 // printDb(targetTableId);
                 // printTree(targetTableId);
-                printBufferPool();
+                // printBufferPool();
             }
         }
+        join_table(1, 2, "joinResult.txt");
 
     }
 
