@@ -18,10 +18,10 @@ typedef struct pageNode {
     struct pageNode * next;
 } pageNode;
 
-typedef struct list {
+typedef struct myList {
     int* keys;
     int numOfKeys;
-} list;
+} myList;
 
 void printFreePageList();
 void printHeader(pagenum_t headerPageNum);
@@ -34,10 +34,10 @@ pageNode* queue = NULL;
 void enqueue( pageNode * new_node);
 pageNode * dequeue( void );
 
-void listAddKey(list* list, int key);
-void listRemoveKey(list* list, int key);
-int listGetRandomKey(list* list);
-int listIsKeyExist(list* list, int key);
+void listAddKey(myList* myList, int key);
+void listRemoveKey(myList* myList, int key);
+int listGetRandomKey(myList* myList);
+int listIsKeyExist(myList* myList, int key);
 
 void test(int numOfTable, int testNum);
 
@@ -49,11 +49,11 @@ void printTables();
 // MAIN
 int main( int argc, char ** argv ) {
 
-    open_table("db_table0");
-    open_table("db_table1");
-    init_db(10);
-    tests();
-    test(2, 1000);
+    // open_table("db_table0");
+    // open_table("db_table1");
+    // init_db(10);
+    // tests();
+    // test(2, 1000);
     // test(2, 1000);
     // test(1, 1000);
     int inputTableId;
@@ -121,8 +121,8 @@ int main( int argc, char ** argv ) {
 
 void test(int numOfTable, int testNum) {
 //for test
-    list* testInput;
-    list* testInputted;
+    myList* testInput;
+    myList* testInputted;
     
 
     srand(time(NULL));
@@ -130,8 +130,8 @@ void test(int numOfTable, int testNum) {
     //test constants
     int keyRange = testNum * 10;
 
-    testInput = (list*)malloc(sizeof(struct list) * numOfTable);
-    testInputted = (list*)malloc(sizeof(struct list) * numOfTable);
+    testInput = (myList*)malloc(sizeof(struct myList) * numOfTable);
+    testInputted = (myList*)malloc(sizeof(struct myList) * numOfTable);
 
     for (int i = 0; i < numOfTable; i++){
         testInput[i].keys = (int*)malloc(sizeof(int) * testNum);
@@ -379,36 +379,36 @@ void printDb(int tableId) {
 
 }
 
-void listAddKey(list* list, int key) {
-    list -> keys[list -> numOfKeys] = key;
-    list -> numOfKeys++;
+void listAddKey(myList* myList, int key) {
+    myList -> keys[myList -> numOfKeys] = key;
+    myList -> numOfKeys++;
 }
 
-void listRemoveKey(list* list, int key) {
+void listRemoveKey(myList* myList, int key) {
     int i;
-    if (listIsKeyExist(list, key) == FAIL) {
-        printf("no key in list\n");
+    if (listIsKeyExist(myList, key) == FAIL) {
+        printf("no key in myList\n");
         return;
     }
 
-    for (i = 0; i < list -> numOfKeys; i++) {
-        if (list -> keys[i] == key) {
+    for (i = 0; i < myList -> numOfKeys; i++) {
+        if (myList -> keys[i] == key) {
             break;
         }
     }
-    for (; i < list -> numOfKeys - 1; i++) {
-        list -> keys[i] = list -> keys[i + 1];
+    for (; i < myList -> numOfKeys - 1; i++) {
+        myList -> keys[i] = myList -> keys[i + 1];
     }
-    list -> numOfKeys--;
+    myList -> numOfKeys--;
 }
 
-int listGetRandomKey(list* list) {
-    return list -> keys[rand() % list -> numOfKeys];
+int listGetRandomKey(myList* myList) {
+    return myList -> keys[rand() % myList -> numOfKeys];
 };
 
-int listIsKeyExist(list* list, int key) {
-    for (int i = 0; i < list -> numOfKeys; i++) {
-        if (list -> keys[i] == key) {
+int listIsKeyExist(myList* myList, int key) {
+    for (int i = 0; i < myList -> numOfKeys; i++) {
+        if (myList -> keys[i] == key) {
             return SUCCESS;
         }
     }
