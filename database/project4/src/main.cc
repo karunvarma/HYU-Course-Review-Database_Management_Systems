@@ -2,6 +2,8 @@
 #include "file.h"
 #include "tests.h"
 #include "buffer.h"
+#include "../include/transaction.h"
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -49,13 +51,15 @@ void printTables();
 // MAIN
 int main( int argc, char ** argv ) {
 
-    // open_table("db_table0");
-    // open_table("db_table1");
-    // init_db(10);
+    open_table("db_table0");
+    open_table("db_table1");
+    init_db(10);
     // tests();
     // test(2, 1000);
     // test(2, 1000);
     // test(1, 1000);
+    begin_trx();
+
     int inputTableId;
     int inputTableId2;
     int input_key;

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <list>
 #include <unordered_map>
+#include <map>
 #include <utility>
 
 extern volatile int transactionId;
@@ -30,9 +31,9 @@ typedef struct transactionManager_t {
 
     // TODO: choose template for transaction table
     // std::list<transaction_t> transactionTable;
-    std::unordered_map<int, transaction_t> transactionTable;
+    std::map<int, transaction_t> transactionTable;
 
-    int nextTransactionId;
+    volatile int nextTransactionId;
     pthread_mutex_t transactionManagerMutex;
 } transactionManager_t;
 
