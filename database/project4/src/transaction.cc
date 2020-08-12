@@ -1,12 +1,5 @@
-// __sync_fetch_and_add(&transactionId, 1);
 
-#include <stdlib.h>
 #include "../include/transaction.h"
-#include <pthread.h>
-
-volatile int transactionId = 0;
-std::unordered_map<int, transaction_t> transactionTable;
-std::unordered_map<uint64_t, std::pair<lock_t*, lock_t*> > lockTable;
 
 transactionManager_t transactionManager {
     {},
@@ -52,4 +45,17 @@ int begin_trx() {
 }
 
 
-int end_trx(int tid);
+int end_trx(int transactionId) {
+    transaction_t* transaction;
+    pthread_mutex_lock(&transactionManager.transactionManagerMutex);
+    transaction = &transactionManager.transactionTable[transactionId];
+    // 1 Acquire the lock table latch.
+    pthread_mutex_lock(&lockManager.lockManagerMutex);
+    // 2 Release all acquired locks and wake up threads who wait on this
+    // transaction(lock node).
+    // 3 Release the lock table latch.
+    // 4 Acquire the transaction system latch.
+    // 5 Delete the transaction from the transaction table.
+    // 6 Release the transaction system latch.
+    // 7 Return the transaction id.
+}

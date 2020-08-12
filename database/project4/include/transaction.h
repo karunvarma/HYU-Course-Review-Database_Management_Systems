@@ -9,8 +9,8 @@
 #include <map>
 #include <utility>
 
-extern volatile int transactionId;
-
+extern transactionManager_t transactionManager;
+extern lockManager_t lockManager;
 
 enum lockMode {
     SHARED,
@@ -49,7 +49,7 @@ typedef struct lockManager_t {
 typedef struct undoLog_t {
     int tableId;
     int64_t key;
-    char old_value[120];
+    char oldValue[120];
 } undoLog_t;
 
 
@@ -94,6 +94,6 @@ int begin_trx();
 // • Clean up the transaction with given tid (transaction id) and its related information
 // that has been used in your lock manager. (Shrinking phase of strict 2PL)
 // • Return the completed transaction id if success, otherwise return 0.
-int end_trx(int tid);
+int end_trx(int transactionId);
 
 #endif /* __TRANSACTION_H_*/
