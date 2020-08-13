@@ -10,7 +10,9 @@
 #define SUCCESS 0
 #define FAIL -1
 
+//global
 extern pthread_mutex_t bufferPoolMutex;
+extern pthread_mutex_t fdTableMutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct table {
     int tableId;

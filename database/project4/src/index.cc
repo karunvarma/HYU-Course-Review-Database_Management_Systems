@@ -1,5 +1,4 @@
 #include "../include/index.h"
-#include <string>
 
 
 // Insert input ‘key/value’ (record) to data file at the right place.
@@ -852,15 +851,33 @@ int join_table(int table_id_1, int table_id_2, char * pathname) {
 
 //overload
 int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
+    // Acquire the buffer pool latch.
+    // Find a leaf page containing the given record(key).
+    // Try to acquire the buffer page latch.
+    // 1 If fail to acquire, release the buffer pool latch and go to (1).
+    // Release the buffer pool latch. Try to acquire record lock.
+    // 1 If fail due to deadlock, abort transaction and release buffer page latch. 
+    // Return FAIL. 2 If fail due to lock conflict, release the buffer page 
+    // latch and wait(sleep) until another
+    // thread wake me up. After waken up, go to (1).
+    //  Do update / find.
+    // Release the buffer page latch.
+    // Return SUCCESS.
+
     pagenum_t pageNum;
     int i = 0;
+    pthread_mutex_lock(&fdTableMutex);
     fd = bufferGetFdOfTable(tableId);
+    pthread_mutex_unlock(&fdTableMutex);
+
+    pthread_mutex_lock(&bufferPoolMutex);
     pageNum = findLeaf(tableId, key);
     if (pageNum == 0) {
+        pthread_mutex_unlock(&bufferPoolMutex);
         return FAIL;
     }
     page_t* page = bufferRequestPage(tableId, pageNum);
-
+    pthread_mutex_unlock(&bufferPoolMutex);
     while (i < ((leafPage_t*)page) -> numOfKeys) {
         if (((leafPage_t*)page) -> record[i].key == key) {
             break;

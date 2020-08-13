@@ -96,4 +96,8 @@ int begin_trx();
 // • Return the completed transaction id if success, otherwise return 0.
 int end_trx(int transactionId);
 
+
+int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, int transactionId);
+
+
 #endif /* __TRANSACTION_H_*/

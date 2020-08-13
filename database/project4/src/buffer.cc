@@ -5,6 +5,7 @@ pthread_mutex_t bufferPoolMutex = PTHREAD_MUTEX_INITIALIZER;
 int numOfBuffer = 0;
 
 table* tables = NULL;
+pthread_mutex_t fdTableMutex = PTHREAD_MUTEX_INITIALIZER;
 int numOfTables = 0;
 
 // open table and store table's information

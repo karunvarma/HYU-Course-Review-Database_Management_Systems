@@ -59,3 +59,9 @@ int end_trx(int transactionId) {
     // 6 Release the transaction system latch.
     // 7 Return the transaction id.
 }
+
+int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, int transactionId) {
+
+    // acquire lock table mutex
+    // pthread_mutex_lock( &lockManager.lockmanager )
+}
