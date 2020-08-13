@@ -849,3 +849,42 @@ int join_table(int table_id_1, int table_id_2, char * pathname) {
 
     }
 }
+
+//overload
+int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
+    pagenum_t pageNum;
+    int i = 0;
+    fd = bufferGetFdOfTable(tableId);
+    pageNum = findLeaf(tableId, key);
+    if (pageNum == 0) {
+        return FAIL;
+    }
+    page_t* page = bufferRequestPage(tableId, pageNum);
+
+    while (i < ((leafPage_t*)page) -> numOfKeys) {
+        if (((leafPage_t*)page) -> record[i].key == key) {
+            break;
+        }
+        i++;
+    }
+
+    if (i == ((leafPage_t*)page) -> numOfKeys) {
+        bufferUnpinPage(tableId, pageNum);
+        return FAIL; // fail
+    } else {
+        strcpy(ret_val, ((leafPage_t*)page) -> record[i].value);
+        bufferUnpinPage(tableId, pageNum);
+        return SUCCESS; // success
+    }
+
+}
+
+int db_update(int table_id, int64_t key, char* values, int trx_id) {
+
+}
+
+
+// Deadlock check은 내가 접근하고자 하는 record에 나의 lock mode와 
+// 충돌 (conflict) 관계가 있는 lock이 다른 트랜잭션에 의해 list의 앞에 있다면 
+// 그때 검사를 시행하면 됩니다.
+// 다른 경우에는 deadlock check가 필요하지 않습니다. 

@@ -68,4 +68,28 @@ int shutdown_db();
 // • Return 0 if success, otherwise return non-zero value.
 // • Two tables should have been opened earlier.
 int join_table(int table_id_1, int table_id_2, char * pathname);
+
+//overload
+// • Read values in the table with matching key for this transaction 
+// which has its id trx_id.
+// • return 0 (SUCCESS): operation is successfully done 
+// and the transaction can continue the next operation.
+// • return non-zero (FAILED): operation is failed 
+// (e.g., deadlock detected) and the transaction should be aborted. 
+// Note that all tasks that need to be arranged (e.g.,releasing the locks 
+// that are held on this transaction, rollback of previous
+// operations, etc… ) should be completed in db_find().
+int db_find(int tableId, int64_t key, char *ret_val, int trx_id);
+
+// • Find the matching key and modify the values, where 
+// each value (column) never exceeds the existing one.
+// • return 0 (SUCCESS): operation is successfully done and 
+// the transaction can continue the next operation.
+// • return non-zero (FAILED): operation is failed (e.g., deadlock detected)
+//  and the transaction should be aborted. Note that all tasks 
+//  that need to be arranged (e.g.,releasing the locks that are held 
+//  on this transaction, rollback of previous operations, etc… ) 
+//  should be completed in db_update().
+int db_update(int table_id, int64_t key, char* values, int trx_id);
+
 #endif /* __BPT_H__*/

@@ -4,10 +4,13 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <pthread.h>
 #include "file.h"
 
 #define SUCCESS 0
 #define FAIL -1
+
+extern pthread_mutex_t bufferPoolMutex;
 
 typedef struct table {
     int tableId;
@@ -24,6 +27,7 @@ typedef struct bufferPage_t {
     int isPinned;
     struct bufferPage_t* prev;
     struct bufferPage_t* next;
+    pthread_mutex_t bufferPageMutex;
 } bufferPage_t;
 
 

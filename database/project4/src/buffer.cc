@@ -1,6 +1,7 @@
-#include "buffer.h"
+#include "../include/buffer.h"
 
 bufferPage_t* bufferPool = NULL;
+pthread_mutex_t bufferPoolMutex = PTHREAD_MUTEX_INITIALIZER;
 int numOfBuffer = 0;
 
 table* tables = NULL;
@@ -50,6 +51,7 @@ int bufferInitDb(int bufNum) {
             bufferPool[i].prev = &bufferPool[i - 1];
             bufferPool[i].next = &bufferPool[i + 1];
         }
+        bufferPool[i].bufferPageMutex = PTHREAD_MUTEX_INITIALIZER;
     }
     return SUCCESS;
 }
