@@ -1,7 +1,7 @@
-database/**/*.o
-database/**/*.a
-database/**/main
-database/**/main.exe
+*.o
+*.a
+main
+main.exe
 .vscode
 db
 db_table*
