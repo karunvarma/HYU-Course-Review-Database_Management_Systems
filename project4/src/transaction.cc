@@ -62,6 +62,24 @@ int end_trx(int transactionId) {
 
 int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, int transactionId) {
 
+    lock_t* lock;
+
+    pthread_mutex_lock(&lockManager.lockManagerMutex);
+
+
+    lock = lockManager.lockTable[pageNum].second;
+
+    if (lock == NULL) {
+        // no lock in the bucket
+        // make lock node
+        // insert to the list
+    }
+
+    // there's lock list
+    // check conflict
+    while(lock )
+    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+
     // acquire lock table mutex
     // pthread_mutex_lock( &lockManager.lockmanager )
 }

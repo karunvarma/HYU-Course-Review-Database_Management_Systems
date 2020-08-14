@@ -9,8 +9,8 @@
 #include <map>
 #include <utility>
 
-extern transactionManager_t transactionManager;
-extern lockManager_t lockManager;
+extern struct transactionManager_t transactionManager;
+extern struct lockManager_t lockManager;
 
 enum lockMode {
     SHARED,
