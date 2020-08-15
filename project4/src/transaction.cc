@@ -62,6 +62,13 @@ int end_trx(int transactionId) {
 
 int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, int transactionId) {
 
+
+    // Acquire the lock table latch.
+    // Find the linked list with identical page id in lock table.
+    // Find lock nodes of given key in the list. If there is not a lock node of given key, insert a new lock node.
+    // 1 If no conflict, return SUCCESS.
+    // 2 If conflict, return CONFLICT.
+    // 3 If deadlock is detected, return DEADLOCK.
     lock_t* lock;
 
     pthread_mutex_lock(&lockManager.lockManagerMutex);
