@@ -64,6 +64,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, int transactio
 
 
     // Acquire the lock table latch.
+    pthread_mutex_lock(&lockManager.lockManagerMutex);
     // Find the linked list with identical page id in lock table.
     // Find lock nodes of given key in the list. If there is not a lock node of given key, insert a new lock node.
     // 1 If no conflict, return SUCCESS.
@@ -71,10 +72,9 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, int transactio
     // 3 If deadlock is detected, return DEADLOCK.
     lock_t* lock;
 
-    pthread_mutex_lock(&lockManager.lockManagerMutex);
 
 
-    lock = lockManager.lockTable[pageNum].second;
+    // lock = lockManager.lockTable[pageNum].second;
 
     if (lock == NULL) {
         // no lock in the bucket
