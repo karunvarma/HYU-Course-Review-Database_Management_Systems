@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <map>
 #include <utility>
+#include <stdlib.h>
 
 extern struct transactionManager_t transactionManager;
 extern struct lockManager_t lockManager;
@@ -97,7 +98,7 @@ int begin_trx();
 int end_trx(int transactionId);
 
 
-int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, int transactionId);
+int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode, int transactionId);
 
 
 #endif /* __TRANSACTION_H_*/

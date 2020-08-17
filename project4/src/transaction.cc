@@ -60,8 +60,7 @@ int end_trx(int transactionId) {
     // 7 Return the transaction id.
 }
 
-int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, int transactionId) {
-
+int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode, int transactionId) {
 
     // Acquire the lock table latch.
     pthread_mutex_lock(&lockManager.lockManagerMutex);
@@ -70,21 +69,35 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, int transactio
     // 1 If no conflict, return SUCCESS.
     // 2 If conflict, return CONFLICT.
     // 3 If deadlock is detected, return DEADLOCK.
-    lock_t* lock;
-
-
+    lock_t *lock;
 
     // lock = lockManager.lockTable[pageNum].second;
+    lock_t *newLock;
 
-    if (lock == NULL) {
+    if (lock == NULL)
+    {
         // no lock in the bucket
         // make lock node
         // insert to the list
+        newLock = (lock_t *)malloc(sizeof(struct lock_t));
+        pthread_mutex_lock(&transactionManager.transactionManagerMutex);
+        newLock -> transaction = &transactionManager.transactionTable[transactionId];
+        pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
+        newLock -> tableId = tableId;
+        newLock -> pageNum = pageNum;
+        newLock -> key = key;
+        newLock -> acquired = true;
+        newLock -> mode = mode;
+
+        newLock -> prev = lockManager.lockTable[pageNum].first;
+        newLock -> next = lockManager.lockTable[pageNum].second;
+        lockManager.lockTable[pageNum].first = newLock;
+        lockManager.lockTable[pageNum].second = newLock;
     }
 
     // there's lock list
     // check conflict
-    while(lock )
+    while (lock)
     pthread_mutex_unlock(&lockManager.lockManagerMutex);
 
     // acquire lock table mutex
