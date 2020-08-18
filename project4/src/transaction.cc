@@ -69,13 +69,13 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
     // 1 If no conflict, return SUCCESS.
     // 2 If conflict, return CONFLICT.
     // 3 If deadlock is detected, return DEADLOCK.
-    lock_t *lock;
+    lock_t* lock, * tail, * newLock;
+    //check from tail of lockTable.
+    tail = lockManager.lockTable[pageNum].second;
+    lock = tail;
 
-    // lock = lockManager.lockTable[pageNum].second;
-    lock_t *newLock;
+    if (lock == NULL) {
 
-    if (lock == NULL)
-    {
         // no lock in the bucket
         // make lock node
         // insert to the list
@@ -89,15 +89,99 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
         newLock -> acquired = true;
         newLock -> mode = mode;
 
-        newLock -> prev = lockManager.lockTable[pageNum].first;
-        newLock -> next = lockManager.lockTable[pageNum].second;
+        newLock -> prev = NULL;
+        newLock -> next = NULL;
         lockManager.lockTable[pageNum].first = newLock;
         lockManager.lockTable[pageNum].second = newLock;
+
+        pthread_mutex_unlock(&lockManager.lockManagerMutex);
+        return SUCCESS;
     }
 
-    // there's lock list
+    // check if transaction already acquired the lock
+    
+    // where should check this? in lock list or transaction's lock list,
+    // should lock the transaction manager?
+
+    while (lock != NULL) {
+        if (lock -> transaction -> id == transactionId &&
+            lock -> tableId == tableId &&
+            lock -> key == key) {
+            if (lock -> acquired == true) {
+                if (lock -> mode == EXCLUSIVE) {
+                    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                    return SUCCESS;
+                } else {
+                    // mode == SHARED
+                    if (mode == EXCLUSIVE) {
+                        pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                        return DEADLOCK;
+                    } else {
+                        pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                        return SUCCESS;
+                    }
+                }
+            } else {
+                // have been slept because of CONFLICT.
+                // some thread woke me up.
+                lock -> transaction -> acquiredLocks.push_back(lock);
+                lock -> transaction -> state = RUNNING;
+                lock -> transaction -> waitLock = NULL;
+
+                lock -> acquired = true;
+
+                pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                return SUCCESS;
+
+            }
+        }
+        lock = lock -> prev;
+    }
+    lock = tail;
+    
+    lock_t* lastLock;
+    transaction_t* transactionPointer;
     // check conflict
-    while (lock)
+    while (lock != NULL) {
+        if (lock -> tableId == tableId && lock -> key == key){
+            lastLock = lock;
+
+            // check DEADLOCK, following wait-for graph
+            transactionPointer = lastLock -> transaction;
+            while (transactionPointer -> state == WAITING) {
+                if (transactionPointer -> id == transactionId) {
+                    // cycle will be created if we insert this lock
+                    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                    return DEADLOCK;
+                }
+                transactionPointer = transactionPointer -> waitLock -> transaction;
+            }
+
+            // not DEADLOCK , just CONFLICT
+            newLock = (lock_t*)malloc(sizeof(struct lock_t));
+
+            pthread_mutex_lock(&transactionManager.transactionManagerMutex);
+            newLock -> transaction = &transactionManager.transactionTable[transactionId];
+            pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
+
+            newLock -> transaction -> state = WAITING;
+            newLock -> transaction -> waitLock = lock;
+
+            newLock -> tableId = tableId;
+            newLock -> pageNum = pageNum;
+            newLock -> key = key;
+            newLock -> acquired = true;
+            newLock -> mode = mode;
+            
+            // insert into lock list
+            newLock -> prev = lockManager.lockTable[pageNum].second;
+            lockManager.lockTable[pageNum].second -> next = newLock;
+            lockManager.lockTable[pageNum].second = newLock;
+            newLock -> next = NULL;
+
+        }
+        lock = lock -> prev;
+    }
     pthread_mutex_unlock(&lockManager.lockManagerMutex);
 
     // acquire lock table mutex

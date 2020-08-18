@@ -24,6 +24,12 @@ enum transactionState {
     WAITING
 };
 
+enum ReturnOfAcquireRecordLock {
+    SUCCESS,
+    CONFLICT,
+    DEADLOCK
+};
+
 struct lock_t;
 struct transaction_t;
 
@@ -42,6 +48,8 @@ typedef struct lockManager_t {
 
     // TODO: choose template for lock table
     // should lock table have head and tail both? why not only head?
+
+    // first for head, second for tail.
     std::unordered_map<uint64_t, std::pair<lock_t*, lock_t*> > lockTable;
 
     pthread_mutex_t lockManagerMutex;
