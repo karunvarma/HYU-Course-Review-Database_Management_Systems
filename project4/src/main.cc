@@ -1,7 +1,7 @@
 #include "../include/index.h"
-#include "file.h"
-#include "tests.h"
-#include "buffer.h"
+#include "../include/file.h"
+#include "../include/tests.h"
+#include "../include/buffer.h"
 #include "../include/transaction.h"
 
 #include <unistd.h>

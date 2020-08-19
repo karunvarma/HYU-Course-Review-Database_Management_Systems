@@ -851,19 +851,18 @@ int join_table(int table_id_1, int table_id_2, char * pathname) {
 
 //overload
 int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
-    // Acquire the buffer pool latch.
-    // Find a leaf page containing the given record(key).
-    // Try to acquire the buffer page latch.
-    // 1 If fail to acquire, release the buffer pool latch and go to (1).
-    // Release the buffer pool latch. Try to acquire record lock.
-    // 1 If fail due to deadlock, abort transaction and release buffer page latch. 
-    // Return FAIL. 2 If fail due to lock conflict, release the buffer page 
-    // latch and wait(sleep) until another
+    // ① Acquire the buffer pool latch.
+    // ② Find a leaf page containing the given record(key).
+    // ③ Try to acquire the buffer page latch.
+    // ① If fail to acquire, release the buffer pool latch and go to (1).
+    // ④ Release the buffer pool latch.
+    // ⑤ Try to acquire record lock.
+    // ① If fail due to deadlock, abort transaction and release buffer page latch. Return FAIL.
+    // ② If fail due to lock conflict, release the buffer page latch and wait(sleep) until another
     // thread wake me up. After waken up, go to (1).
-    //  Do update / find.
-    // Release the buffer page latch.
-    // Return SUCCESS.
-
+    // ⑥ Do update / find.
+    // ⑦ Release the buffer page latch.
+    // ⑧ Return SUCCESS.
     pagenum_t pageNum;
     int i = 0;
     pthread_mutex_lock(&fdTableMutex);
@@ -884,13 +883,18 @@ int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
         }
         i++;
     }
-
+    
+    // TODO: what should lock? bufferpool or buffer page, or both?
     if (i == ((leafPage_t*)page) -> numOfKeys) {
+        pthread_mutex_lock(&bufferPoolMutex);
         bufferUnpinPage(tableId, pageNum);
+        pthread_mutex_unlock(&bufferPoolMutex);
         return FAIL; // fail
     } else {
         strcpy(ret_val, ((leafPage_t*)page) -> record[i].value);
+        pthread_mutex_lock(&bufferPoolMutex);
         bufferUnpinPage(tableId, pageNum);
+        pthread_mutex_unlock(&bufferPoolMutex);
         return SUCCESS; // success
     }
 
@@ -899,7 +903,6 @@ int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
 int db_update(int table_id, int64_t key, char* values, int trx_id) {
 
 }
-
 
 // Deadlock check은 내가 접근하고자 하는 record에 나의 lock mode와 
 // 충돌 (conflict) 관계가 있는 lock이 다른 트랜잭션에 의해 list의 앞에 있다면 

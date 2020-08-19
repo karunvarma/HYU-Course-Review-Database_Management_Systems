@@ -7,8 +7,8 @@
 #include <string.h>
 #include <iostream>
 #include <string>
-#include "file.h"
-#include "buffer.h"
+#include "../include/file.h"
+#include "../include/buffer.h"
 
 #define SUCCESS 0
 #define FAIL -1

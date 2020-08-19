@@ -12,7 +12,7 @@
 
 //global
 extern pthread_mutex_t bufferPoolMutex;
-extern pthread_mutex_t fdTableMutex = PTHREAD_MUTEX_INITIALIZER;
+extern pthread_mutex_t fdTableMutex;
 
 typedef struct table {
     int tableId;

@@ -66,7 +66,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
     pthread_mutex_lock(&lockManager.lockManagerMutex);
     // Find the linked list with identical page id in lock table.
     // Find lock nodes of given key in the list. If there is not a lock node of given key, insert a new lock node.
-    // 1 If no conflict, return SUCCESS.
+    // 1 If no conflict, return LOCKSUCCESS.
     // 2 If conflict, return CONFLICT.
     // 3 If deadlock is detected, return DEADLOCK.
     lock_t* lock, * tail, * newLock;
@@ -95,7 +95,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
         lockManager.lockTable[pageNum].second = newLock;
 
         pthread_mutex_unlock(&lockManager.lockManagerMutex);
-        return SUCCESS;
+        return LOCKSUCCESS;
     }
 
     // check if transaction already acquired the lock
@@ -110,7 +110,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
             if (lock -> acquired == true) {
                 if (lock -> mode == EXCLUSIVE) {
                     pthread_mutex_unlock(&lockManager.lockManagerMutex);
-                    return SUCCESS;
+                    return LOCKSUCCESS;
                 } else {
                     // mode == SHARED
                     if (mode == EXCLUSIVE) {
@@ -118,7 +118,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                         return DEADLOCK;
                     } else {
                         pthread_mutex_unlock(&lockManager.lockManagerMutex);
-                        return SUCCESS;
+                        return LOCKSUCCESS;
                     }
                 }
             } else {
@@ -131,7 +131,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                 lock -> acquired = true;
 
                 pthread_mutex_unlock(&lockManager.lockManagerMutex);
-                return SUCCESS;
+                return LOCKSUCCESS;
 
             }
         }
@@ -140,21 +140,21 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
     lock = tail;
     
     lock_t* lastLock;
-    transaction_t* transactionPointer;
+    transaction_t* transaction;
     // check conflict
     while (lock != NULL) {
         if (lock -> tableId == tableId && lock -> key == key){
             lastLock = lock;
 
             // check DEADLOCK, following wait-for graph
-            transactionPointer = lastLock -> transaction;
-            while (transactionPointer -> state == WAITING) {
-                if (transactionPointer -> id == transactionId) {
+            transaction = lastLock -> transaction;
+            while (transaction -> state == WAITING) {
+                if (transaction -> id == transactionId) {
                     // cycle will be created if we insert this lock
                     pthread_mutex_unlock(&lockManager.lockManagerMutex);
                     return DEADLOCK;
                 }
-                transactionPointer = transactionPointer -> waitLock -> transaction;
+                transaction = transaction -> waitLock -> transaction;
             }
 
             // not DEADLOCK , just CONFLICT
@@ -183,7 +183,6 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
         lock = lock -> prev;
     }
     pthread_mutex_unlock(&lockManager.lockManagerMutex);
-
-    // acquire lock table mutex
-    // pthread_mutex_lock( &lockManager.lockmanager )
+    
+    return LOCKSUCCESS;
 }

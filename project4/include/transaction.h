@@ -25,7 +25,7 @@ enum transactionState {
 };
 
 enum ReturnOfAcquireRecordLock {
-    SUCCESS,
+    LOCKSUCCESS,
     CONFLICT,
     DEADLOCK
 };
