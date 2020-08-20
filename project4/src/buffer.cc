@@ -225,13 +225,15 @@ int bufferUnpinPage(int tableId, pagenum_t pageNum) {
     bufferPage_t* bufferPage;
 
     bufferPage = bufferFindBufferPage(tableId, pageNum);
-
+    pthread_mutex_lock(&bufferPage -> bufferPageMutex);
     if (bufferPage == NULL) {
         //for debug
         printf("should not execute this line\n");
+        pthread_mutex_unlock(&bufferPage -> bufferPageMutex);
         return FAIL;
     } else {
         (bufferPage -> isPinned)--;
+        pthread_mutex_unlock(&bufferPage -> bufferPageMutex);
         return SUCCESS;
     }
 }
