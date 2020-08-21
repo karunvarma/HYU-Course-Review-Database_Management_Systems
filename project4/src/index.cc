@@ -882,7 +882,12 @@ int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
         }
 
         page = bufferRequestPage(tableId, leafPageNum);
-        // TODO: lock buffer page
+
+        if (bufferLockBufferPage(tableId, leafPageNum) == FAIL) {
+            pthread_mutex_unlock(&bufferPoolMutex);
+            continue;
+        }
+        pthread_mutex_unlock(&bufferPoolMutex);
 
         indexOfKey = 0;
         while (indexOfKey < ((leafPage_t*)page) -> numOfKeys) {
@@ -908,11 +913,11 @@ int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
             strcpy(ret_val, ((leafPage_t*)page) -> record[indexOfKey].value);
             bufferUnpinPage(tableId, leafPageNum);
 
-            // TODO: release buffer page
+            bufferUnlockBufferPage(tableId, leafPageNum);
             return SUCCESS;
         } else if (ret == CONFLICT) {
             
-            // TODO: release buffer page
+            bufferUnlockBufferPage(tableId, leafPageNum);
 
             bufferUnpinPage(tableId, leafPageNum);
 
@@ -932,21 +937,21 @@ int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
             continue;
         } else if (ret == DEADLOCK) {
             // abort transaction,
+            bufferUnlockBufferPage(tableId, leafPageNum);
 
             // should undo things in here?
             // worry about infinite function call by DEADLOCK
             // // undo things...
-            // transaction_t* transaction;
-            // transaction = &transactionManager.transactionTable[trx_id];
-            // std::list<undoLog_t> undoLogList = transaction -> undoLogList;
-            // while (!transaction -> undoLogList.empty()) {
-            //     undoLog_t* undoLog;
-            //     undoLog = &transaction -> undoLogList.back();
-            //     db_update(tableId, undoLog -> key, undoLog -> oldValue, trx_id);
-            //     transaction -> undoLogList.pop_back();
-            // }
+            transaction_t* transaction;
+            transaction = &transactionManager.transactionTable[trx_id];
+            std::list<undoLog_t> undoLogList = transaction -> undoLogList;
+            while (!transaction -> undoLogList.empty()) {
+                undoLog_t* undoLog;
+                undoLog = &transaction -> undoLogList.back();
+                db_update(tableId, undoLog -> key, undoLog -> oldValue, trx_id);
+                transaction -> undoLogList.pop_back();
+            }
 
-            // TODO: release bufferpage
 
             // return FAIL
             return FAIL;
@@ -978,6 +983,11 @@ int db_update(int table_id, int64_t key, char* values, int trx_id) {
 
         page = bufferRequestPage(table_id, leafPageNum);
         // TODO: lock buffer page
+        if (bufferLockBufferPage(table_id, leafPageNum) == FAIL) {
+            pthread_mutex_unlock(&bufferPoolMutex);
+            continue;
+        }
+        pthread_mutex_unlock(&bufferPoolMutex);
 
         indexOfKey = 0;
         while (indexOfKey < ((leafPage_t*)page) -> numOfKeys) {
@@ -1004,11 +1014,11 @@ int db_update(int table_id, int64_t key, char* values, int trx_id) {
             bufferMakeDirty(table_id, leafPageNum);
             bufferUnpinPage(table_id, leafPageNum);
 
-            // TODO: release buffer page
+            bufferUnlockBufferPage(table_id, leafPageNum);
             return SUCCESS;
         } else if (ret == CONFLICT) {
 
-            // TODO: release buffer page
+            bufferUnlockBufferPage(table_id, leafPageNum);
 
             bufferUnpinPage(table_id, leafPageNum);
 
@@ -1028,21 +1038,21 @@ int db_update(int table_id, int64_t key, char* values, int trx_id) {
             continue;
         } else if (ret == DEADLOCK) {
             // abort transaction,
+            bufferUnlockBufferPage(table_id, leafPageNum);
 
             // should undo things in here?
             // worry about infinite function call by DEADLOCK
-            // // undo things...
-            // transaction_t* transaction;
-            // transaction = &transactionManager.transactionTable[trx_id];
-            // std::list<undoLog_t> undoLogList = transaction -> undoLogList;
-            // while (!transaction -> undoLogList.empty()) {
-            //     undoLog_t* undoLog;
-            //     undoLog = &transaction -> undoLogList.back();
-            //     db_update(table_id, undoLog -> key, undoLog -> oldValue, trx_id);
-            //     transaction -> undoLogList.pop_back();
-            // }
+            // undo things...
+            transaction_t* transaction;
+            transaction = &transactionManager.transactionTable[trx_id];
+            std::list<undoLog_t> undoLogList = transaction -> undoLogList;
+            while (!transaction -> undoLogList.empty()) {
+                undoLog_t* undoLog;
+                undoLog = &transaction -> undoLogList.back();
+                db_update(table_id, undoLog -> key, undoLog -> oldValue, trx_id);
+                transaction -> undoLogList.pop_back();
+            }
 
-            // TODO: release bufferpage
 
             // return FAIL
             return FAIL;
