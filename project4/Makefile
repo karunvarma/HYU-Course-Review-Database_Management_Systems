@@ -21,7 +21,7 @@ TARGET=main
 all: $(TARGET)
 $(TARGET): $(TARGET_OBJ)
 	make static_library
-	$(CC) $(CXXFLAGS) -o $@ $^ -L $(LIBS) -lbpt
+	$(CC) $(CXXFLAGS) -o $@ $^ -L $(LIBS) -lbpt -lpthread
 
 clean:
 	rm -f $(TARGET) $(TARGET).exe $(TARGET_OBJ) $(OBJS_FOR_LIB) $(LIBS)*.a db_table*
@@ -31,3 +31,4 @@ library:
 
 static_library: $(OBJS_FOR_LIB)
 	ar cr $(LIBS)libbpt.a $(OBJS_FOR_LIB)
+
