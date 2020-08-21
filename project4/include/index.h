@@ -9,6 +9,7 @@
 #include <string>
 #include "../include/file.h"
 #include "../include/buffer.h"
+#include "../include/transaction.h"
 
 #define SUCCESS 0
 #define FAIL -1

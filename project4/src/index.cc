@@ -863,48 +863,190 @@ int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
     // ⑥ Do update / find.
     // ⑦ Release the buffer page latch.
     // ⑧ Return SUCCESS.
-    pagenum_t pageNum;
-    int i = 0;
-    pthread_mutex_lock(&fdTableMutex);
-    fd = bufferGetFdOfTable(tableId);
-    pthread_mutex_unlock(&fdTableMutex);
 
-    pthread_mutex_lock(&bufferPoolMutex);
-    pageNum = findLeaf(tableId, key);
-    if (pageNum == 0) {
-        pthread_mutex_unlock(&bufferPoolMutex);
-        return FAIL;
-    }
-    page_t* page = bufferRequestPage(tableId, pageNum);
-    pthread_mutex_unlock(&bufferPoolMutex);
-    while (i < ((leafPage_t*)page) -> numOfKeys) {
-        if (((leafPage_t*)page) -> record[i].key == key) {
-            break;
+    page_t* page;
+    pagenum_t leafPageNum;
+    int done = 0;
+    int indexOfKey = 0;
+
+    while (!done) {
+        pthread_mutex_lock(&bufferPoolMutex);
+        leafPageNum = findLeaf(tableId, key);
+
+        // if no root page.
+        if (leafPageNum == 0) {
+            // not abort, just inform to client
+            pthread_mutex_unlock(&bufferPoolMutex);
+            printf("[ERROR]: findleaf = 0\n");
+            return FAIL;
         }
-        i++;
+
+        page = bufferRequestPage(tableId, leafPageNum);
+        // TODO: lock buffer page
+
+        indexOfKey = 0;
+        while (indexOfKey < ((leafPage_t*)page) -> numOfKeys) {
+            if (((leafPage_t*)page) -> record[indexOfKey].key == key) {
+                break;
+            }
+            indexOfKey++;
+        }
+
+        // no key.
+        if (indexOfKey == ((leafPage_t*)page) -> numOfKeys) {
+            // inform to client, not abort
+            printf("[ERROR]: indexOfKey == ((leafPage_t*)page) -> numOfKeys\n");
+            return FAIL;
+        } 
+
+        int ret;
+        // acquire record lock
+        ret = acquireRecordLock(tableId, leafPageNum, key, EXCLUSIVE, trx_id);
+
+        if (ret == LOCKSUCCESS) {
+            
+            strcpy(ret_val, ((leafPage_t*)page) -> record[indexOfKey].value);
+            bufferUnpinPage(tableId, leafPageNum);
+
+            // TODO: release buffer page
+            return SUCCESS;
+        } else if (ret == CONFLICT) {
+            
+            // TODO: release buffer page
+
+            bufferUnpinPage(tableId, leafPageNum);
+
+            // release lockmanager mutex
+            pthread_mutex_unlock(&lockManager.lockManagerMutex);
+            // sleep wait
+            transaction_t* transaction;
+            // TODO: should lock transaction manager?
+            transaction =  &transactionManager.transactionTable[trx_id];
+            pthread_mutex_lock(&transaction -> transactionMutex);
+            transaction -> state = WAITING;
+            pthread_cond_wait(&transaction -> transactionCond, &transaction -> transactionMutex);
+            transaction -> state = RUNNING;
+            pthread_mutex_unlock(&transaction -> transactionMutex);
+
+            // after wake up, return to first.
+            continue;
+        } else if (ret == DEADLOCK) {
+            // abort transaction,
+
+            // should undo things in here?
+            // worry about infinite function call by DEADLOCK
+            // // undo things...
+            // transaction_t* transaction;
+            // transaction = &transactionManager.transactionTable[trx_id];
+            // std::list<undoLog_t> undoLogList = transaction -> undoLogList;
+            // while (!transaction -> undoLogList.empty()) {
+            //     undoLog_t* undoLog;
+            //     undoLog = &transaction -> undoLogList.back();
+            //     db_update(tableId, undoLog -> key, undoLog -> oldValue, trx_id);
+            //     transaction -> undoLogList.pop_back();
+            // }
+
+            // TODO: release bufferpage
+
+            // return FAIL
+            return FAIL;
+        }
+
     }
-    
-    // TODO: what should lock? bufferpool or buffer page, or both?
-    if (i == ((leafPage_t*)page) -> numOfKeys) {
-        pthread_mutex_lock(&bufferPoolMutex);
-        bufferUnpinPage(tableId, pageNum);
-        pthread_mutex_unlock(&bufferPoolMutex);
-        return FAIL; // fail
-    } else {
-        strcpy(ret_val, ((leafPage_t*)page) -> record[i].value);
-        pthread_mutex_lock(&bufferPoolMutex);
-        bufferUnpinPage(tableId, pageNum);
-        pthread_mutex_unlock(&bufferPoolMutex);
-        return SUCCESS; // success
-    }
+
 
 }
 
 int db_update(int table_id, int64_t key, char* values, int trx_id) {
 
-}
+    page_t* page;
+    pagenum_t leafPageNum;
+    int done = 0;
+    int indexOfKey = 0;
 
-// Deadlock check은 내가 접근하고자 하는 record에 나의 lock mode와 
-// 충돌 (conflict) 관계가 있는 lock이 다른 트랜잭션에 의해 list의 앞에 있다면 
-// 그때 검사를 시행하면 됩니다.
-// 다른 경우에는 deadlock check가 필요하지 않습니다. 
+    while (!done) {
+        pthread_mutex_lock(&bufferPoolMutex);
+        leafPageNum = findLeaf(table_id, key);
+
+        // if no root page.
+        if (leafPageNum == 0) {
+            // not abort, just inform to client
+            pthread_mutex_unlock(&bufferPoolMutex);
+            printf("[ERROR]: findleaf = 0\n");
+            return FAIL;
+        }
+
+        page = bufferRequestPage(table_id, leafPageNum);
+        // TODO: lock buffer page
+
+        indexOfKey = 0;
+        while (indexOfKey < ((leafPage_t*)page) -> numOfKeys) {
+            if (((leafPage_t*)page) -> record[indexOfKey].key == key) {
+                break;
+            }
+            indexOfKey++;
+        }
+
+        // no key.
+        if (indexOfKey == ((leafPage_t*)page) -> numOfKeys) {
+            // inform to client, not abort
+            printf("[ERROR]: indexOfKey == ((leafPage_t*)page) -> numOfKeys\n");
+            return FAIL;
+        } 
+
+        int ret;
+        // acquire record lock
+        ret = acquireRecordLock(table_id, leafPageNum, key, EXCLUSIVE, trx_id);
+
+        if (ret == LOCKSUCCESS) {
+            // do update
+            strcpy(((leafPage_t*)page) -> record[indexOfKey].value, values);
+            bufferMakeDirty(table_id, leafPageNum);
+            bufferUnpinPage(table_id, leafPageNum);
+
+            // TODO: release buffer page
+            return SUCCESS;
+        } else if (ret == CONFLICT) {
+
+            // TODO: release buffer page
+
+            bufferUnpinPage(table_id, leafPageNum);
+
+            // release lockmanager mutex
+            pthread_mutex_unlock(&lockManager.lockManagerMutex);
+            // sleep wait
+            transaction_t* transaction;
+            // TODO: should lock transaction manager?
+            transaction =  &transactionManager.transactionTable[trx_id];
+            pthread_mutex_lock(&transaction -> transactionMutex);
+            transaction -> state = WAITING;
+            pthread_cond_wait(&transaction -> transactionCond, &transaction -> transactionMutex);
+            transaction -> state = RUNNING;
+            pthread_mutex_unlock(&transaction -> transactionMutex);
+
+            // after wake up, return to first step.
+            continue;
+        } else if (ret == DEADLOCK) {
+            // abort transaction,
+
+            // should undo things in here?
+            // worry about infinite function call by DEADLOCK
+            // // undo things...
+            // transaction_t* transaction;
+            // transaction = &transactionManager.transactionTable[trx_id];
+            // std::list<undoLog_t> undoLogList = transaction -> undoLogList;
+            // while (!transaction -> undoLogList.empty()) {
+            //     undoLog_t* undoLog;
+            //     undoLog = &transaction -> undoLogList.back();
+            //     db_update(table_id, undoLog -> key, undoLog -> oldValue, trx_id);
+            //     transaction -> undoLogList.pop_back();
+            // }
+
+            // TODO: release bufferpage
+
+            // return FAIL
+            return FAIL;
+        }
+
+    }
+}
