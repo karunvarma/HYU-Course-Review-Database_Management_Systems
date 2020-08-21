@@ -70,4 +70,8 @@ void bufferFreePage(int tableId, pagenum_t pageNum);
 //alloc pagenum and write {0} 4kb into physical file
 pagenum_t bufferAllocPage(int tableId);
 
+int bufferLockBufferPage(int tableId, pagenum_t pageNum);
+int bufferUnlockBufferPage(int tableId, pagenum_t pageNum);
+
+
 #endif /* __BUFFER_H_*/

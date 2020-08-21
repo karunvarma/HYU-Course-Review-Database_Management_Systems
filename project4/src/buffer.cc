@@ -287,3 +287,39 @@ pagenum_t bufferAllocPage(int tableId) {
 
     }
 }
+
+int bufferLockBufferPage(int tableId, pagenum_t pageNum) {
+    bufferPage_t* bufferPage;
+
+    bufferPage = bufferFindBufferPage(tableId, pageNum);
+
+    if (bufferPage == NULL) {
+        //for debug
+        printf("should not execute this line\n");
+        return FAIL;
+    } else {
+        if (pthread_mutex_trylock(&bufferPage -> bufferPageMutex) == 0) {
+            // lock success
+            return SUCCESS;
+        } else {
+            // lock fail
+            return FAIL;
+        }
+        
+    }
+}
+
+int bufferUnlockBufferPage(int tableId, pagenum_t pageNum) {
+    bufferPage_t* bufferPage;
+
+    bufferPage = bufferFindBufferPage(tableId, pageNum);
+
+    if (bufferPage == NULL) {
+        //for debug
+        printf("should not execute this line\n");
+        return FAIL;
+    } else {
+        pthread_mutex_unlock(&bufferPage -> bufferPageMutex);
+        return SUCCESS;
+    }
+}
