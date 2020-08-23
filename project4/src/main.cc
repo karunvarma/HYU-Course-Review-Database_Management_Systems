@@ -47,7 +47,21 @@ void printLRUList();
 void printBufferPool();
 void printTables();
 
+void* thread_function() {
+    open_table("db_table_test");
+    init_db(10);
 
+    //do insert
+
+    
+}
+
+void* thread_function2() {
+    begin_trx();
+
+    //do find or update
+    
+}
 // MAIN
 int main( int argc, char ** argv ) {
 
