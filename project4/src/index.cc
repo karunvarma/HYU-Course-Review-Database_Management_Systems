@@ -906,7 +906,7 @@ int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
 
         int ret;
         // acquire record lock
-        ret = acquireRecordLock(tableId, leafPageNum, key, EXCLUSIVE, trx_id);
+        ret = acquireRecordLock(tableId, leafPageNum, key, SHARED, trx_id);
 
         if (ret == LOCKSUCCESS) {
             
@@ -982,7 +982,7 @@ int db_update(int table_id, int64_t key, char* values, int trx_id) {
         }
 
         page = bufferRequestPage(table_id, leafPageNum);
-        // TODO: lock buffer page
+
         if (bufferLockBufferPage(table_id, leafPageNum) == FAIL) {
             pthread_mutex_unlock(&bufferPoolMutex);
             continue;
@@ -1009,6 +1009,12 @@ int db_update(int table_id, int64_t key, char* values, int trx_id) {
         ret = acquireRecordLock(table_id, leafPageNum, key, EXCLUSIVE, trx_id);
 
         if (ret == LOCKSUCCESS) {
+            // make log before update
+            pthread_mutex_lock(&transactionManager.transactionManagerMutex);
+            transaction_t* transaction = &transactionManager.transactionTable[trx_id];
+            pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
+            // transaction -> undoLogList.push_back((undoLog_t){table_id, key, ((leafPage_t*)page) -> record[indexOfKey].value});
+            
             // do update
             strcpy(((leafPage_t*)page) -> record[indexOfKey].value, values);
             bufferMakeDirty(table_id, leafPageNum);
