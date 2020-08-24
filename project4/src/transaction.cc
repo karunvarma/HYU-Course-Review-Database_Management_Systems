@@ -49,15 +49,66 @@ int end_trx(int transactionId) {
     transaction_t* transaction;
     pthread_mutex_lock(&transactionManager.transactionManagerMutex);
     transaction = &transactionManager.transactionTable[transactionId];
+    
     // 1 Acquire the lock table latch.
     pthread_mutex_lock(&lockManager.lockManagerMutex);
     // 2 Release all acquired locks and wake up threads who wait on this
     // transaction(lock node).
+    lock_t* acquiredLock, * lock;
+
+    while (!(transaction -> acquiredLocks.empty())) {
+
+        acquiredLock = transaction -> acquiredLocks.front();
+        transaction -> acquiredLocks.pop_front();
+
+
+        lock = acquiredLock -> next;
+        if (acquiredLock -> prev != NULL) {
+            acquiredLock -> prev -> next = acquiredLock -> next;
+        }
+        if (acquiredLock -> next != NULL) {
+            acquiredLock -> next -> prev = acquiredLock -> prev;
+        }
+
+        while (lock != NULL) {
+
+            // acquired, 
+            if (lock -> acquired == true) {
+                lock = lock -> next;
+                continue;
+            }
+
+            // not acquired && on the same object.
+            if (lock -> tableId == acquiredLock -> tableId &&
+                lock -> pageNum == acquiredLock -> pageNum &&
+                lock -> key == acquiredLock -> key
+                ) 
+            { 
+                // lock is waiting acquired lock to release
+                if (lock -> transaction -> waitLock == acquiredLock) {
+                    // wake up
+                    pthread_mutex_lock(&lock -> transaction -> transactionMutex);
+                    pthread_cond_signal(&lock -> transaction -> transactionCond);
+                    pthread_mutex_unlock(&(lock -> transaction -> transactionMutex));
+                }
+            }
+
+
+            lock = lock -> next;
+        }
+        free(acquiredLock);
+    }
+
     // 3 Release the lock table latch.
+    pthread_mutex_unlock(&lockManager.lockManagerMutex);
     // 4 Acquire the transaction system latch.
     // 5 Delete the transaction from the transaction table.
+    transactionManager.transactionTable.erase(transactionId);
     // 6 Release the transaction system latch.
+    pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
+    
     // 7 Return the transaction id.
+    return transactionId;
 }
 
 int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode, int transactionId) {
