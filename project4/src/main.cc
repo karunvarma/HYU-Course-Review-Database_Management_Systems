@@ -47,32 +47,62 @@ void printLRUList();
 void printBufferPool();
 void printTables();
 
-void* thread_function() {
+void* thread_function(void* arg) {
     open_table("db_table_test");
     init_db(10);
 
     //do insert
+    db_insert(1, 1, "11");
+    db_insert(1, 2, "12");
+    db_insert(1, 3, "13");
 
-    
+    pthread_exit((void*)0);
 }
 
-void* thread_function2() {
-    begin_trx();
+void* thread_function2(void* arg) {
+    int transactionId;
+    char retval[120];
+
+    transactionId = begin_trx();
 
     //do find or update
-    
+    db_find(1, 1, retval, transactionId);
+    printf("retval: %s\n", retval);
+    std::string tmp = "updateval(transactionId: "+ std::to_string(transactionId) + ")";
+    db_update(1,2, (char*) tmp.c_str(), transactionId);
+    db_find(1, 2, retval, transactionId);
+    printf("retval: %s\n", retval);
+    end_trx(transactionId);
+    pthread_exit((void*)123);
+
 }
 // MAIN
 int main( int argc, char ** argv ) {
 
-    open_table("db_table0");
-    open_table("db_table1");
-    init_db(10);
+    // open_table("db_table0");
+    // open_table("db_table1");
+    // init_db(10);
     // tests();
     // test(2, 1000);
     // test(2, 1000);
     // test(1, 1000);
-    begin_trx();
+    // begin_trx();
+    pthread_t initThread;
+    int initRet;
+    int NUM_THREAD = 2;
+    pthread_t thread[NUM_THREAD];
+
+    pthread_create(&initThread, NULL, thread_function, NULL);
+    int tmpret = pthread_join(initThread, (void**)&initRet);
+    for (int i = 0; i < NUM_THREAD; i++) {
+
+        pthread_create(&thread[i], NULL, thread_function2, NULL);
+    }
+
+    for (int i = 0; i < NUM_THREAD; i++) {
+        tmpret = pthread_join(thread[i], (void**)&initRet);
+
+    }
 
     int inputTableId;
     int inputTableId2;
