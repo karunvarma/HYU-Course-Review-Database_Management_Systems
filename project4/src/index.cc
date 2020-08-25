@@ -850,7 +850,7 @@ int join_table(int table_id_1, int table_id_2, char * pathname) {
 }
 
 //overload
-int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
+int db_find(int tableId, int64_t key, char* retVal, int transactionId) {
     // ① Acquire the buffer pool latch.
     // ② Find a leaf page containing the given record(key).
     // ③ Try to acquire the buffer page latch.
@@ -884,6 +884,7 @@ int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
         page = bufferRequestPage(tableId, leafPageNum);
 
         if (bufferLockBufferPage(tableId, leafPageNum) == FAIL) {
+            bufferUnpinPage(tableId, leafPageNum);
             pthread_mutex_unlock(&bufferPoolMutex);
             continue;
         }
@@ -901,32 +902,32 @@ int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
         if (indexOfKey == ((leafPage_t*)page) -> numOfKeys) {
             // inform to client, not abort
             printf("[ERROR]: indexOfKey == ((leafPage_t*)page) -> numOfKeys\n");
+            bufferUnpinPage(tableId, leafPageNum);
             return FAIL;
         } 
 
         int ret;
         // acquire record lock
-        ret = acquireRecordLock(tableId, leafPageNum, key, SHARED, trx_id);
+        ret = acquireRecordLock(tableId, leafPageNum, key, SHARED, transactionId);
 
         if (ret == LOCKSUCCESS) {
             
-            strcpy(ret_val, ((leafPage_t*)page) -> record[indexOfKey].value);
+            strcpy(retVal, ((leafPage_t*)page) -> record[indexOfKey].value);
             bufferUnpinPage(tableId, leafPageNum);
 
             bufferUnlockBufferPage(tableId, leafPageNum);
             return SUCCESS;
         } else if (ret == CONFLICT) {
             
-            bufferUnlockBufferPage(tableId, leafPageNum);
-
             bufferUnpinPage(tableId, leafPageNum);
+            bufferUnlockBufferPage(tableId, leafPageNum);
 
             // release lockmanager mutex
             pthread_mutex_unlock(&lockManager.lockManagerMutex);
             // sleep wait
             transaction_t* transaction;
             // TODO: should lock transaction manager?
-            transaction =  &transactionManager.transactionTable[trx_id];
+            transaction =  &transactionManager.transactionTable[transactionId];
             pthread_mutex_lock(&transaction -> transactionMutex);
             transaction -> state = WAITING;
             pthread_cond_wait(&transaction -> transactionCond, &transaction -> transactionMutex);
@@ -936,33 +937,23 @@ int db_find(int tableId, int64_t key, char *ret_val, int trx_id) {
             // after wake up, return to first.
             continue;
         } else if (ret == DEADLOCK) {
-            // abort transaction,
+            bufferUnpinPage(tableId, leafPageNum);
             bufferUnlockBufferPage(tableId, leafPageNum);
 
-            // should undo things in here?
-            // worry about infinite function call by DEADLOCK
-            // // undo things...
-            transaction_t* transaction;
-            transaction = &transactionManager.transactionTable[trx_id];
-            std::list<undoLog_t> undoLogList = transaction -> undoLogList;
-            while (!transaction -> undoLogList.empty()) {
-                undoLog_t* undoLog;
-                undoLog = &transaction -> undoLogList.back();
-                db_update(tableId, undoLog -> key, undoLog -> oldValue, trx_id);
-                transaction -> undoLogList.pop_back();
-            }
-
-
+            // abort transaction,
+            abortTransaction(transactionId);
+            
             // return FAIL
             return FAIL;
         }
 
     }
 
-
+    // should not come here
+    return FAIL;
 }
 
-int db_update(int table_id, int64_t key, char* values, int trx_id) {
+int db_update(int tableId, int64_t key, char* values, int transactionId) {
 
     page_t* page;
     pagenum_t leafPageNum;
@@ -971,7 +962,7 @@ int db_update(int table_id, int64_t key, char* values, int trx_id) {
 
     while (!done) {
         pthread_mutex_lock(&bufferPoolMutex);
-        leafPageNum = findLeaf(table_id, key);
+        leafPageNum = findLeaf(tableId, key);
 
         // if no root page.
         if (leafPageNum == 0) {
@@ -981,10 +972,13 @@ int db_update(int table_id, int64_t key, char* values, int trx_id) {
             return FAIL;
         }
 
-        page = bufferRequestPage(table_id, leafPageNum);
+        page = bufferRequestPage(tableId, leafPageNum);
 
-        if (bufferLockBufferPage(table_id, leafPageNum) == FAIL) {
+        if (bufferLockBufferPage(tableId, leafPageNum) == FAIL) {
+
             pthread_mutex_unlock(&bufferPoolMutex);
+            bufferUnpinPage(tableId, leafPageNum);
+
             continue;
         }
         pthread_mutex_unlock(&bufferPoolMutex);
@@ -1001,39 +995,43 @@ int db_update(int table_id, int64_t key, char* values, int trx_id) {
         if (indexOfKey == ((leafPage_t*)page) -> numOfKeys) {
             // inform to client, not abort
             printf("[ERROR]: indexOfKey == ((leafPage_t*)page) -> numOfKeys\n");
+            bufferUnpinPage(tableId, leafPageNum);
             return FAIL;
         } 
 
         int ret;
         // acquire record lock
-        ret = acquireRecordLock(table_id, leafPageNum, key, EXCLUSIVE, trx_id);
+        ret = acquireRecordLock(tableId, leafPageNum, key, EXCLUSIVE, transactionId);
 
         if (ret == LOCKSUCCESS) {
             // make log before update
             pthread_mutex_lock(&transactionManager.transactionManagerMutex);
-            transaction_t* transaction = &transactionManager.transactionTable[trx_id];
+            transaction_t* transaction = &transactionManager.transactionTable[transactionId];
             pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
-            // transaction -> undoLogList.push_back((undoLog_t){table_id, key, ((leafPage_t*)page) -> record[indexOfKey].value});
-            
+            undoLog_t undoLog = {
+                tableId,
+                key,
+            };
+            strcpy(undoLog.oldValue, ((leafPage_t*)page) -> record[indexOfKey].value);
+            transaction -> undoLogList.push_back(std::move(undoLog));
             // do update
             strcpy(((leafPage_t*)page) -> record[indexOfKey].value, values);
-            bufferMakeDirty(table_id, leafPageNum);
-            bufferUnpinPage(table_id, leafPageNum);
+            bufferMakeDirty(tableId, leafPageNum);
+            bufferUnpinPage(tableId, leafPageNum);
 
-            bufferUnlockBufferPage(table_id, leafPageNum);
+            bufferUnlockBufferPage(tableId, leafPageNum);
             return SUCCESS;
         } else if (ret == CONFLICT) {
 
-            bufferUnlockBufferPage(table_id, leafPageNum);
-
-            bufferUnpinPage(table_id, leafPageNum);
+            bufferUnpinPage(tableId, leafPageNum);
+            bufferUnlockBufferPage(tableId, leafPageNum);
 
             // release lockmanager mutex
             pthread_mutex_unlock(&lockManager.lockManagerMutex);
             // sleep wait
             transaction_t* transaction;
             // TODO: should lock transaction manager?
-            transaction =  &transactionManager.transactionTable[trx_id];
+            transaction =  &transactionManager.transactionTable[transactionId];
             pthread_mutex_lock(&transaction -> transactionMutex);
             transaction -> state = WAITING;
             pthread_cond_wait(&transaction -> transactionCond, &transaction -> transactionMutex);
@@ -1043,26 +1041,18 @@ int db_update(int table_id, int64_t key, char* values, int trx_id) {
             // after wake up, return to first step.
             continue;
         } else if (ret == DEADLOCK) {
+            bufferUnpinPage(tableId, leafPageNum);
+            bufferUnlockBufferPage(tableId, leafPageNum);
+
             // abort transaction,
-            bufferUnlockBufferPage(table_id, leafPageNum);
-
-            // should undo things in here?
-            // worry about infinite function call by DEADLOCK
-            // undo things...
-            transaction_t* transaction;
-            transaction = &transactionManager.transactionTable[trx_id];
-            std::list<undoLog_t> undoLogList = transaction -> undoLogList;
-            while (!transaction -> undoLogList.empty()) {
-                undoLog_t* undoLog;
-                undoLog = &transaction -> undoLogList.back();
-                db_update(table_id, undoLog -> key, undoLog -> oldValue, trx_id);
-                transaction -> undoLogList.pop_back();
-            }
-
+            abortTransaction(transactionId);
 
             // return FAIL
             return FAIL;
         }
 
     }
+
+    // should not come here
+    return FAIL;
 }
