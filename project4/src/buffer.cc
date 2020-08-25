@@ -5,11 +5,11 @@ pthread_mutex_t bufferPoolMutex = PTHREAD_MUTEX_INITIALIZER;
 int numOfBuffer = 0;
 
 table* tables = NULL;
-pthread_mutex_t fdTableMutex = PTHREAD_MUTEX_INITIALIZER;
 int numOfTables = 0;
 
 // open table and store table's information
 // return tableId(= numOfTables)
+// from 0 ~
 int bufferOpenTable(char* pathname) {
     if (file_open_table(pathname) == 0) { //not exist
         //init table
@@ -96,10 +96,12 @@ page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
     // if there's finding page in the bufferpool
     // pin the buffer and return page
     if (bufferPage != NULL) {
-        while (bufferPage -> isPinned != 0) {
-            // wait until isPinned to be 0
-            // printf("waiting ispinned to be 0\n");
-        }
+
+        // below is role of buffer page latch
+        // while (bufferPage -> isPinned != 0) {
+        //     // wait until isPinned to be 0
+        //     // printf("waiting ispinned to be 0\n");
+        // }
         retPage = &(bufferPage -> page);
         (bufferPage -> isPinned)++;
 
@@ -113,7 +115,7 @@ page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
 
     // find the first one in the LRU list
     bufferPage  = &bufferPool[0];
-    while( bufferPage -> prev != NULL) {
+    while (bufferPage -> prev != NULL) {
         bufferPage = bufferPage -> prev;
     }
 
