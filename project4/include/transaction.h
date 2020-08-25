@@ -10,6 +10,11 @@
 #include <utility>
 #include <stdlib.h>
 
+// next two headers for abortTransaction.
+// TODO: should the function defined in the index cc?
+#include "buffer.h"
+#include "index.h"
+
 extern struct transactionManager_t transactionManager;
 extern struct lockManager_t lockManager;
 
@@ -108,5 +113,6 @@ int end_trx(int transactionId);
 
 int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode, int transactionId);
 
+int abortTransaction(int transactionId);
 
 #endif /* __TRANSACTION_H_*/
