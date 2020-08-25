@@ -80,7 +80,7 @@ int join_table(int table_id_1, int table_id_2, char * pathname);
 // Note that all tasks that need to be arranged (e.g.,releasing the locks 
 // that are held on this transaction, rollback of previous
 // operations, etc… ) should be completed in db_find().
-int db_find(int tableId, int64_t key, char *ret_val, int trx_id);
+int db_find(int tableId, int64_t key, char* retVal, int transactionId);
 
 // • Find the matching key and modify the values, where 
 // each value (column) never exceeds the existing one.
@@ -91,6 +91,6 @@ int db_find(int tableId, int64_t key, char *ret_val, int trx_id);
 //  that need to be arranged (e.g.,releasing the locks that are held 
 //  on this transaction, rollback of previous operations, etc… ) 
 //  should be completed in db_update().
-int db_update(int table_id, int64_t key, char* values, int trx_id);
+int db_update(int tableId, int64_t key, char* values, int transactionId);
 
 #endif /* __BPT_H__*/
