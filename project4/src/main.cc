@@ -76,9 +76,18 @@ void* thread_function2(void* arg) {
     pthread_exit((void*)123);
 
 }
+void* threadCausingDEADLOCK(void* arg) {
+    int transactionId;
+    char retval[120];
+
+    transactionId = begin_trx();
+    db_find(1, 1, retval, transactionId);
+    db_update(1, 1, "asdfasdf", transactionId);
+    end_trx(transactionId);
+    pthread_exit((void*)1234);
+}
 // MAIN
 int main( int argc, char ** argv ) {
-
     // open_table("db_table0");
     // open_table("db_table1");
     // init_db(10);
