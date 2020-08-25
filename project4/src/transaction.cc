@@ -3,7 +3,7 @@
 
 transactionManager_t transactionManager {
     {},
-    0,
+    1,
     PTHREAD_MUTEX_INITIALIZER
 };
 
@@ -63,12 +63,23 @@ int end_trx(int transactionId) {
 
 
         lock = acquiredLock -> next;
-        if (acquiredLock -> prev != NULL) {
+        // update lock list
+        if (acquiredLock -> prev == NULL && acquiredLock -> next == NULL) {
+            lockManager.lockTable[acquiredLock -> pageNum].first = NULL;
+            lockManager.lockTable[acquiredLock -> pageNum].second = NULL;
+        } else if (acquiredLock -> prev == NULL && acquiredLock -> next != NULL) {
+            lockManager.lockTable[acquiredLock -> pageNum].first = acquiredLock -> next;
+            acquiredLock -> next -> prev = acquiredLock -> prev;
+
+        } else if (acquiredLock -> prev != NULL && acquiredLock -> next == NULL) {
+            lockManager.lockTable[acquiredLock -> pageNum].second = acquiredLock -> prev;
+            acquiredLock -> prev -> next = acquiredLock -> next;
+
+        } else if (acquiredLock -> prev != NULL && acquiredLock -> next != NULL) {
+            acquiredLock -> next -> prev = acquiredLock -> prev;
             acquiredLock -> prev -> next = acquiredLock -> next;
         }
-        if (acquiredLock -> next != NULL) {
-            acquiredLock -> next -> prev = acquiredLock -> prev;
-        }
+
 
         while (lock != NULL) {
 
@@ -133,7 +144,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
         newLock = (lock_t *)malloc(sizeof(struct lock_t));
         pthread_mutex_lock(&transactionManager.transactionManagerMutex);
         newLock -> transaction = &transactionManager.transactionTable[transactionId];
-        pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
+        transactionManager.transactionTable[transactionId].acquiredLocks.push_back(newLock);
         newLock -> tableId = tableId;
         newLock -> pageNum = pageNum;
         newLock -> key = key;
@@ -145,6 +156,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
         lockManager.lockTable[pageNum].first = newLock;
         lockManager.lockTable[pageNum].second = newLock;
 
+        pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
         pthread_mutex_unlock(&lockManager.lockManagerMutex);
         return LOCKSUCCESS;
     }
@@ -175,6 +187,8 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
             } else {
                 // have been slept because of CONFLICT.
                 // some thread woke me up.
+
+                // TODO: should lock transaction manager??
                 lock -> transaction -> acquiredLocks.push_back(lock);
                 lock -> transaction -> state = RUNNING;
                 lock -> transaction -> waitLock = NULL;
@@ -190,15 +204,37 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
     }
     lock = tail;
     
-    lock_t* lastLock;
     transaction_t* transaction;
     // check conflict
     while (lock != NULL) {
         if (lock -> tableId == tableId && lock -> key == key){
-            lastLock = lock;
 
+            if (lock -> mode == SHARED && 
+                lock -> acquired == true && 
+                mode == SHARED) {
+                // shared lock is acquired by othre transaction,
+                // can acquire record lock of this transaction.
+                newLock = (lock_t*)malloc(sizeof(struct lock_t));
+                newLock -> transaction = &transactionManager.transactionTable[transactionId];
+                newLock -> transaction -> acquiredLocks.push_back(newLock);
+
+                newLock -> tableId = tableId;
+                newLock -> pageNum = pageNum;
+                newLock -> key = key;
+                newLock -> acquired = true;
+                newLock -> mode = mode;
+                
+                // insert into lock list
+                newLock -> prev = lockManager.lockTable[pageNum].second;
+                lockManager.lockTable[pageNum].second -> next = newLock;
+                lockManager.lockTable[pageNum].second = newLock;
+                newLock -> next = NULL;
+
+                pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                return LOCKSUCCESS;
+            }
             // check DEADLOCK, following wait-for graph
-            transaction = lastLock -> transaction;
+            transaction = lock -> transaction;
             while (transaction -> state == WAITING) {
                 if (transaction -> id == transactionId) {
                     // cycle will be created if we insert this lock
@@ -213,15 +249,15 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
 
             pthread_mutex_lock(&transactionManager.transactionManagerMutex);
             newLock -> transaction = &transactionManager.transactionTable[transactionId];
-            pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
 
             newLock -> transaction -> state = WAITING;
             newLock -> transaction -> waitLock = lock;
+            pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
 
             newLock -> tableId = tableId;
             newLock -> pageNum = pageNum;
             newLock -> key = key;
-            newLock -> acquired = true;
+            newLock -> acquired = false;
             newLock -> mode = mode;
             
             // insert into lock list
@@ -230,10 +266,70 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
             lockManager.lockTable[pageNum].second = newLock;
             newLock -> next = NULL;
 
+            pthread_mutex_unlock(&lockManager.lockManagerMutex);
+            return CONFLICT;
         }
         lock = lock -> prev;
     }
     pthread_mutex_unlock(&lockManager.lockManagerMutex);
     
-    return LOCKSUCCESS;
+    // should not come here
+    return FAIL;
+}
+
+int abortTransaction(int transactionId) {
+    transaction_t* transaction;
+    pagenum_t pageNum;
+    page_t* page;
+    int i;
+
+    transaction = &transactionManager.transactionTable[transactionId];
+
+    std::list<undoLog_t>::reverse_iterator rit;
+
+    // end points to the next of the last element
+    // check if ++rit -> rit++ makes error
+    for (rit = transaction -> undoLogList.rbegin(); rit != transaction -> undoLogList.rend(); ++rit) {
+        while (true) {
+            pthread_mutex_lock(&bufferPoolMutex);
+            pageNum = findLeaf(rit -> tableId, rit -> key);
+
+            if (pageNum == 0) {
+                printf("[ERROR]: pageNum == 0\n");
+                pthread_mutex_unlock(&bufferPoolMutex);
+                return FAIL;
+            }
+
+            if (bufferLockBufferPage(rit -> tableId, pageNum) == FAIL) {
+                pthread_mutex_unlock(&bufferPoolMutex);
+                continue;
+            }
+
+            pthread_mutex_unlock(&bufferPoolMutex);
+
+            //rollback
+            page = bufferRequestPage(rit -> tableId, pageNum);
+            
+            // find index
+            for (i = 0; i < ((leafPage_t*)page) -> numOfKeys; i++) {
+                if (((leafPage_t*)page) -> record[i].key == rit -> key) {
+                    break;
+                }
+            }
+            if (((leafPage_t*)page) -> numOfKeys == i) {
+                // no key in the page ,, should not execute this block
+                bufferUnpinPage(rit -> tableId, pageNum);
+                bufferUnlockBufferPage(rit -> tableId, pageNum);
+                return FAIL;
+            }
+
+            strcpy(((leafPage_t*)page) -> record[i].value, rit -> oldValue);
+            bufferMakeDirty(rit -> tableId, pageNum);
+            bufferUnpinPage(rit -> tableId, pageNum);
+            //release
+            bufferUnlockBufferPage(rit -> tableId, pageNum);
+            break;
+        }
+    }
+    return SUCCESS;
 }
