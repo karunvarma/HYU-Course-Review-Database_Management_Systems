@@ -47,7 +47,14 @@ int begin_trx() {
 
 int end_trx(int transactionId) {
     transaction_t* transaction;
-    pthread_mutex_lock(&transactionManager.transactionManagerMutex);
+
+    if (transactionManager.transactionTable.find(transactionId) == transactionManager.transactionTable.end()) {
+        // transaction doesn't exist in the table,
+        // maybe aborted in previous job.
+        
+        // fail return 0
+        return 0;
+    }
     transaction = &transactionManager.transactionTable[transactionId];
     
     // 1 Acquire the lock table latch.
@@ -113,6 +120,7 @@ int end_trx(int transactionId) {
     // 3 Release the lock table latch.
     pthread_mutex_unlock(&lockManager.lockManagerMutex);
     // 4 Acquire the transaction system latch.
+    pthread_mutex_lock(&transactionManager.transactionManagerMutex);
     // 5 Delete the transaction from the transaction table.
     transactionManager.transactionTable.erase(transactionId);
     // 6 Release the transaction system latch.
@@ -142,7 +150,6 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
         // make lock node
         // insert to the list
         newLock = (lock_t *)malloc(sizeof(struct lock_t));
-        pthread_mutex_lock(&transactionManager.transactionManagerMutex);
         newLock -> transaction = &transactionManager.transactionTable[transactionId];
         transactionManager.transactionTable[transactionId].acquiredLocks.push_back(newLock);
         newLock -> tableId = tableId;
@@ -156,16 +163,12 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
         lockManager.lockTable[pageNum].first = newLock;
         lockManager.lockTable[pageNum].second = newLock;
 
-        pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
         pthread_mutex_unlock(&lockManager.lockManagerMutex);
         return LOCKSUCCESS;
     }
 
     // check if transaction already acquired the lock
     
-    // where should check this? in lock list or transaction's lock list,
-    // should lock the transaction manager?
-
     while (lock != NULL) {
         if (lock -> transaction -> id == transactionId &&
             lock -> tableId == tableId &&
@@ -188,15 +191,36 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                 // have been slept because of CONFLICT.
                 // some thread woke me up.
 
-                // TODO: should lock transaction manager??
-                lock -> transaction -> acquiredLocks.push_back(lock);
-                lock -> transaction -> state = RUNNING;
-                lock -> transaction -> waitLock = NULL;
+                if (lock -> transaction -> waitLock -> mode == EXCLUSIVE) {
+                    // waitlock's mode is X mode
+                    // means waiting only this lock
+                    // can acquire lock
+                    lock -> transaction -> acquiredLocks.push_back(lock);
+                    lock -> transaction -> state = RUNNING;
+                    lock -> transaction -> waitLock = NULL;
 
-                lock -> acquired = true;
+                    lock -> acquired = true;
 
-                pthread_mutex_unlock(&lockManager.lockManagerMutex);
-                return LOCKSUCCESS;
+                    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                    return LOCKSUCCESS;
+                } else {
+                    // waitlock's mode is S mode
+                    // num of waitlock can be more than one
+
+                    // TODO: complete this block
+                }
+                // lock_t* tmpLock;
+
+                // tmpLock = lock -> prev;
+
+                // lock -> transaction -> acquiredLocks.push_back(lock);
+                // lock -> transaction -> state = RUNNING;
+                // lock -> transaction -> waitLock = NULL;
+
+                // lock -> acquired = true;
+
+                // pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                // return LOCKSUCCESS;
 
             }
         }
@@ -233,6 +257,10 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                 pthread_mutex_unlock(&lockManager.lockManagerMutex);
                 return LOCKSUCCESS;
             }
+
+            // TODO: how can i make multiple shared lock to wait one EXCLUSIVE LOCK?
+
+
             // check DEADLOCK, following wait-for graph
             transaction = lock -> transaction;
             while (transaction -> state == WAITING) {
@@ -241,18 +269,19 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                     pthread_mutex_unlock(&lockManager.lockManagerMutex);
                     return DEADLOCK;
                 }
+                if (transaction -> waitLock == NULL) {
+                    break;
+                }
                 transaction = transaction -> waitLock -> transaction;
             }
 
             // not DEADLOCK , just CONFLICT
             newLock = (lock_t*)malloc(sizeof(struct lock_t));
 
-            pthread_mutex_lock(&transactionManager.transactionManagerMutex);
             newLock -> transaction = &transactionManager.transactionTable[transactionId];
 
             newLock -> transaction -> state = WAITING;
             newLock -> transaction -> waitLock = lock;
-            pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
 
             newLock -> tableId = tableId;
             newLock -> pageNum = pageNum;
@@ -260,7 +289,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
             newLock -> acquired = false;
             newLock -> mode = mode;
             
-            // insert into lock list
+            // push back into lock list
             newLock -> prev = lockManager.lockTable[pageNum].second;
             lockManager.lockTable[pageNum].second -> next = newLock;
             lockManager.lockTable[pageNum].second = newLock;
@@ -271,10 +300,28 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
         }
         lock = lock -> prev;
     }
-    pthread_mutex_unlock(&lockManager.lockManagerMutex);
     
-    // should not come here
-    return FAIL;
+    // lock list exist && not in trx's acquired list && lock on the record not exist in the list
+    // can lock the record
+
+    newLock = (lock_t *)malloc(sizeof(struct lock_t));
+    newLock -> transaction = &transactionManager.transactionTable[transactionId];
+    transactionManager.transactionTable[transactionId].acquiredLocks.push_back(newLock);
+    newLock -> tableId = tableId;
+    newLock -> pageNum = pageNum;
+    newLock -> key = key;
+    newLock -> acquired = true;
+    newLock -> mode = mode;
+
+    // push back into lock list
+    newLock -> prev = lockManager.lockTable[pageNum].second;
+    lockManager.lockTable[pageNum].second -> next = newLock;
+    lockManager.lockTable[pageNum].second = newLock;
+    newLock -> next = NULL;
+
+    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+
+    return LOCKSUCCESS;
 }
 
 int abortTransaction(int transactionId) {
@@ -331,5 +378,6 @@ int abortTransaction(int transactionId) {
             break;
         }
     }
+    end_trx(transactionId);
     return SUCCESS;
 }
