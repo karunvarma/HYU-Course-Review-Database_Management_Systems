@@ -863,6 +863,11 @@ int db_find(int tableId, int64_t key, char* retVal, int transactionId) {
     // ⑥ Do update / find.
     // ⑦ Release the buffer page latch.
     // ⑧ Return SUCCESS.
+    if (transactionManager.transactionTable.find(transactionId) == transactionManager.transactionTable.end()) {
+        // transaction doesn't exist in the table,
+        // maybe aborted in previous job.
+        return FAIL;
+    }
 
     page_t* page;
     pagenum_t leafPageNum;
@@ -955,6 +960,12 @@ int db_find(int tableId, int64_t key, char* retVal, int transactionId) {
 
 int db_update(int tableId, int64_t key, char* values, int transactionId) {
 
+    if (transactionManager.transactionTable.find(transactionId) == transactionManager.transactionTable.end()) {
+        // transaction doesn't exist in the table,
+        // maybe aborted in previous job.
+        return FAIL;
+    }
+
     page_t* page;
     pagenum_t leafPageNum;
     int done = 0;
@@ -976,8 +987,8 @@ int db_update(int tableId, int64_t key, char* values, int transactionId) {
 
         if (bufferLockBufferPage(tableId, leafPageNum) == FAIL) {
 
-            pthread_mutex_unlock(&bufferPoolMutex);
             bufferUnpinPage(tableId, leafPageNum);
+            pthread_mutex_unlock(&bufferPoolMutex);
 
             continue;
         }
@@ -1005,9 +1016,7 @@ int db_update(int tableId, int64_t key, char* values, int transactionId) {
 
         if (ret == LOCKSUCCESS) {
             // make log before update
-            pthread_mutex_lock(&transactionManager.transactionManagerMutex);
             transaction_t* transaction = &transactionManager.transactionTable[transactionId];
-            pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
             undoLog_t undoLog = {
                 tableId,
                 key,
