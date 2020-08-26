@@ -137,7 +137,7 @@ int main( int argc, char ** argv ) {
     // begin_trx();
     pthread_t initThread;
     int initRet;
-    int NUM_THREAD = 1;
+    int NUM_THREAD = 10;
     pthread_t thread[NUM_THREAD];
     pthread_t thread2[NUM_THREAD];
     pthread_t deadlockThread;

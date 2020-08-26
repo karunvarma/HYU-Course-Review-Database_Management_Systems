@@ -190,7 +190,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
             } else {
                 // have been slept because of CONFLICT.
                 // some thread woke me up.
-
+                // TODO: check waitLock is NULL
                 if (lock -> transaction -> waitLock -> mode == EXCLUSIVE) {
                     // waitlock's mode is X mode
                     // means waiting only this lock
@@ -204,24 +204,35 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                     pthread_mutex_unlock(&lockManager.lockManagerMutex);
                     return LOCKSUCCESS;
                 } else {
-                    // waitlock's mode is S mode
-                    // num of waitlock can be more than one
+                    // waitlock's mode is S mode (this lock mode is EXCLUSIVE)
+                    lock_t* tmpLock;
 
-                    // TODO: complete this block
+                    tmpLock = lock -> prev;
+
+                    while (tmpLock != NULL) {
+                        if (tmpLock -> tableId == tableId && tmpLock -> key == key) {
+                            // case 1: waitlock was sharing SHARED lock with other trx's SHARED lock, can't acquire lock
+
+                            lock -> transaction -> state = WAITING;
+                            lock -> transaction -> waitLock = tmpLock;
+
+                            pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                            return CONFLICT;
+                        }
+
+                        tmpLock = tmpLock -> prev;
+                    }
+
+                    // case 2: waitlock was only one , can acquire lock
+                    
+                    lock -> transaction -> acquiredLocks.push_back(lock);
+                    lock -> transaction -> state = RUNNING;
+                    lock -> transaction -> waitLock = NULL;
+                    lock -> acquired = true;
+
+                    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                    return LOCKSUCCESS;
                 }
-                // lock_t* tmpLock;
-
-                // tmpLock = lock -> prev;
-
-                // lock -> transaction -> acquiredLocks.push_back(lock);
-                // lock -> transaction -> state = RUNNING;
-                // lock -> transaction -> waitLock = NULL;
-
-                // lock -> acquired = true;
-
-                // pthread_mutex_unlock(&lockManager.lockManagerMutex);
-                // return LOCKSUCCESS;
-
             }
         }
         lock = lock -> prev;
@@ -264,13 +275,10 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
             // check DEADLOCK, following wait-for graph
             transaction = lock -> transaction;
             while (transaction -> state == WAITING) {
-                if (transaction -> id == transactionId) {
+                if (transaction -> waitLock -> transaction -> id == transactionId) {
                     // cycle will be created if we insert this lock
                     pthread_mutex_unlock(&lockManager.lockManagerMutex);
                     return DEADLOCK;
-                }
-                if (transaction -> waitLock == NULL) {
-                    break;
                 }
                 transaction = transaction -> waitLock -> transaction;
             }
