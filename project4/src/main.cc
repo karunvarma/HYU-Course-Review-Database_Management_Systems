@@ -114,6 +114,30 @@ void* thread_function3(void* arg) {
     pthread_exit((void*)123);
 
 }
+void* thread_function4(void* arg) {
+    int transactionId;
+    char retval[120];
+
+    transactionId = begin_trx();
+    printf("[BEGIN TRANSACTION] transactionId: %d\n", transactionId);
+
+    //do find or update
+    db_find(1, 3, retval, transactionId);
+    printf("[FIND] transactionId: %d, tableId: 1, key: 3 value: %s\n", transactionId, retval);
+
+    db_find(1, 1, retval, transactionId);
+    printf("[FIND] transactionId: %d, tableId: 1, key: 1 value: %s\n", transactionId, retval);
+
+
+    db_find(1, 2, retval, transactionId);
+    printf("[FIND] transactionId: %d, tableId: 1, key: 2 value: %s\n", transactionId, retval);
+
+    end_trx(transactionId);
+    printf("[END TRANSACTION] transactionId: %d\n", transactionId);
+
+    pthread_exit((void*)123);
+
+}
 void* threadCausingDEADLOCK(void* arg) {
     int transactionId;
     char retval[120];
@@ -137,32 +161,30 @@ int main( int argc, char ** argv ) {
     // begin_trx();
     pthread_t initThread;
     int initRet;
-    int NUM_THREAD = 10;
+    int NUM_THREAD;
+    NUM_THREAD = 2;
     pthread_t thread[NUM_THREAD];
     pthread_t thread2[NUM_THREAD];
+    pthread_t thread3[NUM_THREAD];
     pthread_t deadlockThread;
 
+    
     pthread_create(&initThread, NULL, thread_function, NULL);
     int tmpret = pthread_join(initThread, (void**)&initRet);
     for (int i = 0; i < NUM_THREAD; i++) {
-
         pthread_create(&thread[i], NULL, thread_function2, NULL);
-    }
-    for (int i = 0; i < NUM_THREAD; i++) {
-
         pthread_create(&thread2[i], NULL, thread_function3, NULL);
+        pthread_create(&thread3[i], NULL, thread_function4, NULL);
     }
-    pthread_create(&deadlockThread, NULL, threadCausingDEADLOCK, NULL);
+    // pthread_create(&deadlockThread, NULL, threadCausingDEADLOCK, NULL);
+
 
     for (int i = 0; i < NUM_THREAD; i++) {
         tmpret = pthread_join(thread[i], (void**)&initRet);
-
-    }
-    for (int i = 0; i < NUM_THREAD; i++) {
         tmpret = pthread_join(thread2[i], (void**)&initRet);
-
+        tmpret = pthread_join(thread3[i], (void**)&initRet);
     }
-    pthread_join(deadlockThread, (void**)&initRet);
+    // pthread_join(deadlockThread, (void**)&initRet);
 
     int inputTableId;
     int inputTableId2;

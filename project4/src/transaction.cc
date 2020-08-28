@@ -116,6 +116,7 @@ int end_trx(int transactionId) {
         }
         free(acquiredLock);
     }
+    // TODO: should delete inserted lock of this transaction. (not acquired , waiting lock)
 
     // 3 Release the lock table latch.
     pthread_mutex_unlock(&lockManager.lockManagerMutex);
@@ -168,7 +169,8 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
     }
 
     // check if transaction already acquired the lock
-    
+    transaction_t* transaction;
+
     while (lock != NULL) {
         if (lock -> transaction -> id == transactionId &&
             lock -> tableId == tableId &&
@@ -213,6 +215,17 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                         if (tmpLock -> tableId == tableId && tmpLock -> key == key) {
                             // case 1: waitlock was sharing SHARED lock with other trx's SHARED lock, can't acquire lock
 
+                            // check deadlock
+                            transaction = tmpLock -> transaction ;
+                            while (transaction -> state == WAITING) {
+                                if (transaction -> waitLock -> transaction -> id == transactionId) {
+                                    // cycle will be created if we insert this lock
+                                    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                    return DEADLOCK;
+                                }
+                                transaction = transaction -> waitLock -> transaction;
+                            }
+
                             lock -> transaction -> state = WAITING;
                             lock -> transaction -> waitLock = tmpLock;
 
@@ -239,38 +252,80 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
     }
     lock = tail;
     
-    transaction_t* transaction;
+    
     // check conflict
     while (lock != NULL) {
         if (lock -> tableId == tableId && lock -> key == key){
 
-            if (lock -> mode == SHARED && 
-                lock -> acquired == true && 
-                mode == SHARED) {
-                // shared lock is acquired by othre transaction,
-                // can acquire record lock of this transaction.
-                newLock = (lock_t*)malloc(sizeof(struct lock_t));
-                newLock -> transaction = &transactionManager.transactionTable[transactionId];
-                newLock -> transaction -> acquiredLocks.push_back(newLock);
+            if (lock -> mode == SHARED && mode == SHARED) {
+                if (lock -> acquired == true) {
 
-                newLock -> tableId = tableId;
-                newLock -> pageNum = pageNum;
-                newLock -> key = key;
-                newLock -> acquired = true;
-                newLock -> mode = mode;
-                
-                // insert into lock list
-                newLock -> prev = lockManager.lockTable[pageNum].second;
-                lockManager.lockTable[pageNum].second -> next = newLock;
-                lockManager.lockTable[pageNum].second = newLock;
-                newLock -> next = NULL;
+                    // shared lock is acquired by othre transaction,
+                    // can acquire record lock of this transaction.
+                    newLock = (lock_t*)malloc(sizeof(struct lock_t));
+                    newLock -> transaction = &transactionManager.transactionTable[transactionId];
+                    newLock -> transaction -> acquiredLocks.push_back(newLock);
 
-                pthread_mutex_unlock(&lockManager.lockManagerMutex);
-                return LOCKSUCCESS;
+                    newLock -> tableId = tableId;
+                    newLock -> pageNum = pageNum;
+                    newLock -> key = key;
+                    newLock -> acquired = true;
+                    newLock -> mode = mode;
+                    
+                    // insert into lock list
+                    newLock -> prev = lockManager.lockTable[pageNum].second;
+                    lockManager.lockTable[pageNum].second -> next = newLock;
+                    lockManager.lockTable[pageNum].second = newLock;
+                    newLock -> next = NULL;
+
+                    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                    return LOCKSUCCESS;
+                } else {
+                    // lock is waiting(means lock's waitlock is exclusive), can share waiting lock.
+
+                    // check deadlock 
+                    transaction = lock -> transaction -> waitLock -> transaction;
+                    while (transaction -> state == WAITING) {
+                        if (transaction -> waitLock -> transaction -> id == transactionId) {
+                            // cycle will be created if we insert this lock
+                            pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                            return DEADLOCK;
+                        }
+                        transaction = transaction -> waitLock -> transaction;
+                    }
+
+                    // not DEADLOCK , just CONFLICT
+                    newLock = (lock_t*)malloc(sizeof(struct lock_t));
+
+                    newLock -> transaction = &transactionManager.transactionTable[transactionId];
+
+                    newLock -> transaction -> state = WAITING;
+
+                    if (lock -> transaction -> waitLock == NULL) {
+                        // error
+                        printf("ERROR: lock -> transaction -> waitLock == NULL\n");
+                        exit(0);
+
+                    }
+                    newLock -> transaction -> waitLock = lock -> transaction -> waitLock;
+
+                    newLock -> tableId = tableId;
+                    newLock -> pageNum = pageNum;
+                    newLock -> key = key;
+                    newLock -> acquired = false;
+                    newLock -> mode = mode;
+                    
+                    // push back into lock list
+                    newLock -> prev = lockManager.lockTable[pageNum].second;
+                    lockManager.lockTable[pageNum].second -> next = newLock;
+                    lockManager.lockTable[pageNum].second = newLock;
+                    newLock -> next = NULL;
+
+                    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                    return CONFLICT;
+
+                }
             }
-
-            // TODO: how can i make multiple shared lock to wait one EXCLUSIVE LOCK?
-
 
             // check DEADLOCK, following wait-for graph
             transaction = lock -> transaction;
