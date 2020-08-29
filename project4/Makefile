@@ -14,7 +14,7 @@ TARGET_OBJ:=$(SRCDIR)main.o
 SRCS_FOR_LIB:=$(SRCDIR)index.cc $(SRCDIR)file.cc $(SRCDIR)buffer.cc $(SRCDIR)transaction.cc
 OBJS_FOR_LIB:=$(SRCS_FOR_LIB:.cc=.o)
 
-CXXFLAGS+= -g -fPIC -I $(INC)
+CXXFLAGS+= -g -fPIC -I $(INC) -std=c++11
 
 TARGET=main
 	
