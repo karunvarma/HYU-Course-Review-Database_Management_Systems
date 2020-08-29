@@ -192,9 +192,18 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
             } else {
                 // have been slept because of CONFLICT.
                 // some thread woke me up.
+
                 // TODO: check waitLock is NULL
+                // 원래 NULL  이어야 됨
                 if (lock -> transaction -> waitLock -> mode == EXCLUSIVE) {
                     // waitlock's mode is X mode
+
+                    // TODO: waitlock is waiting and aborted due to deadlock
+                    if (lock -> transaction -> waitLock -> acquired == false) {
+                        // check deadlock
+
+                        // conflict 
+                    }
                     // means waiting only this lock
                     // can acquire lock
                     lock -> transaction -> acquiredLocks.push_back(lock);
@@ -202,7 +211,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                     lock -> transaction -> waitLock = NULL;
 
                     lock -> acquired = true;
-
+  
                     pthread_mutex_unlock(&lockManager.lockManagerMutex);
                     return LOCKSUCCESS;
                 } else {
@@ -219,7 +228,10 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                             transaction = tmpLock -> transaction ;
                             while (transaction -> state == WAITING) {
                                 if (transaction -> waitLock -> transaction -> id == transactionId) {
-                                    // cycle will be created if we insert this lock
+                                    // not acquired, but push to acquiredlock list
+                                    // to signal waiting this lock when aborting this transaction.
+                                    lock -> transaction -> acquiredLocks.push_back(lock);
+                                    
                                     pthread_mutex_unlock(&lockManager.lockManagerMutex);
                                     return DEADLOCK;
                                 }
