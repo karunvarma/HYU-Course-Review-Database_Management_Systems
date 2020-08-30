@@ -140,10 +140,14 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
     // 1 If no conflict, return LOCKSUCCESS.
     // 2 If conflict, return CONFLICT.
     // 3 If deadlock is detected, return DEADLOCK.
-    lock_t* lock, * tail, * newLock;
+    lock_t* lock, * tail, * newLock, * tmpLock;
     //check from tail of lockTable.
     tail = lockManager.lockTable[pageNum].second;
     lock = tail;
+
+    // TODO: not use wait lock, 
+    // don't access to freed memory,  
+    // check conflict by following list prev, not waitlock.
 
     if (lock == NULL) {
 
@@ -194,16 +198,95 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                 // some thread woke me up.
 
                 // TODO: check waitLock is NULL
-                // 원래 NULL  이어야 됨
+                // TODO: 이미 해제된 메모리에 접근하고 있음.( 해제 하고 깨움)
                 if (lock -> transaction -> waitLock -> mode == EXCLUSIVE) {
-                    // waitlock's mode is X mode
 
-                    // TODO: waitlock is waiting and aborted due to deadlock
-                    if (lock -> transaction -> waitLock -> acquired == false) {
-                        // check deadlock
+                    tmpLock = lock -> prev;
 
-                        // conflict 
+                    // check CONFLICT
+                    while (tmpLock != NULL) {
+                        if (tmpLock -> tableId == tableId && tmpLock -> key == key) {
+                            if (tmpLock -> acquired == true) {
+                                if (tmpLock -> mode == SHARED && mode == SHARED) {
+                                    lock -> acquired = true;
+                                    lock -> transaction -> acquiredLocks.push_back(lock);
+                                    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                    return LOCKSUCCESS;
+                                }
+                                //check deadlock
+                                transaction = tmpLock -> transaction;
+                                while (transaction -> state == WAITING) {
+                                    if (transaction -> waitLock -> transaction -> id == transactionId) {
+                                        lock -> transaction -> acquiredLocks.push_back(lock);
+                                        pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                        return DEADLOCK;
+                                    }
+                                    transaction = transaction -> waitLock -> transaction;
+                                }
+                                lock -> transaction -> state = WAITING;
+                                lock -> transaction -> waitLock = tmpLock;
+
+                                pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                return CONFLICT;
+                            } else {
+                                if (mode == EXCLUSIVE) {
+                                    //check deadlock
+                                    transaction = tmpLock -> transaction;
+                                    while (transaction -> state == WAITING) {
+                                        if (transaction -> waitLock -> transaction -> id == transactionId) {
+                                            lock -> transaction -> acquiredLocks.push_back(lock);
+                                            pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                            return DEADLOCK;
+                                        }
+                                        transaction = transaction -> waitLock -> transaction;
+                                    }
+                                    lock -> transaction -> state = WAITING;
+                                    lock -> transaction -> waitLock = tmpLock;
+
+                                    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                    return CONFLICT;
+                                } else {
+                                    if (tmpLock -> mode == SHARED) {
+                                        // check deadlock and wait
+                                        transaction = tmpLock -> transaction -> waitLock -> transaction;
+                                        while (transaction -> state == WAITING) {
+                                            if (transaction -> waitLock -> transaction -> id == transactionId) {
+                                                lock -> transaction -> acquiredLocks.push_back(lock);
+                                                pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                                return DEADLOCK;
+                                            }
+                                            transaction = transaction -> waitLock -> transaction;
+                                        }
+                                        lock -> transaction -> state = WAITING;
+                                        lock -> transaction -> waitLock = tmpLock -> transaction -> waitLock;
+
+                                        pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                        return CONFLICT;
+                                    } else {
+                                        //check deadlock
+                                        transaction = tmpLock -> transaction;
+                                        while (transaction -> state == WAITING) {
+                                            if (transaction -> waitLock -> transaction -> id == transactionId) {
+                                                lock -> transaction -> acquiredLocks.push_back(lock);
+                                                pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                                return DEADLOCK;
+                                            }
+                                            transaction = transaction -> waitLock -> transaction;
+                                        }
+                                        lock -> transaction -> state = WAITING;
+                                        lock -> transaction -> waitLock = tmpLock;
+
+                                        pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                        return CONFLICT;
+                                    }
+
+                                }
+
+                            }
+                        }
+                        tmpLock = tmpLock -> prev;
                     }
+
                     // means waiting only this lock
                     // can acquire lock
                     lock -> transaction -> acquiredLocks.push_back(lock);
@@ -216,7 +299,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                     return LOCKSUCCESS;
                 } else {
                     // waitlock's mode is S mode (this lock mode is EXCLUSIVE)
-                    lock_t* tmpLock;
+                    
 
                     tmpLock = lock -> prev;
 
