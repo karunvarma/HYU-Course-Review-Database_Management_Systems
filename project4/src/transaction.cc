@@ -116,7 +116,6 @@ int end_trx(int transactionId) {
         }
         free(acquiredLock);
     }
-    // TODO: should delete inserted lock of this transaction. (not acquired , waiting lock)
 
     // 3 Release the lock table latch.
     pthread_mutex_unlock(&lockManager.lockManagerMutex);
@@ -250,6 +249,7 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                                         // check deadlock and wait
                                         transaction = tmpLock -> transaction -> waitLock -> transaction;
                                         while (transaction -> state == WAITING) {
+                                            // TODO: transaction can be NULL, fix this
                                             if (transaction -> waitLock -> transaction -> id == transactionId) {
                                                 lock -> transaction -> acquiredLocks.push_back(lock);
                                                 pthread_mutex_unlock(&lockManager.lockManagerMutex);

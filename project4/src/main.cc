@@ -162,7 +162,7 @@ int main( int argc, char ** argv ) {
     pthread_t initThread;
     int initRet;
     int NUM_THREAD;
-    NUM_THREAD = 2;
+    NUM_THREAD = 50;
     pthread_t thread[NUM_THREAD];
     pthread_t thread2[NUM_THREAD];
     pthread_t thread3[NUM_THREAD];
@@ -173,7 +173,11 @@ int main( int argc, char ** argv ) {
     int tmpret = pthread_join(initThread, (void**)&initRet);
     for (int i = 0; i < NUM_THREAD; i++) {
         pthread_create(&thread[i], NULL, thread_function2, NULL);
+    }
+    for (int i = 0; i < NUM_THREAD; i++) {
         pthread_create(&thread2[i], NULL, thread_function3, NULL);
+    }
+    for (int i = 0; i < NUM_THREAD; i++) {
         pthread_create(&thread3[i], NULL, thread_function4, NULL);
     }
     // pthread_create(&deadlockThread, NULL, threadCausingDEADLOCK, NULL);
