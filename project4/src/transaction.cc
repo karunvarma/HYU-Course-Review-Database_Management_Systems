@@ -130,6 +130,7 @@ int end_trx(int transactionId) {
     return transactionId;
 }
 
+// TODO: 근본적 구조가 잘못됨. 다시 만들기.
 int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode, int transactionId) {
 
     // Acquire the lock table latch.
@@ -246,8 +247,54 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                                     return CONFLICT;
                                 } else {
                                     if (tmpLock -> mode == SHARED) {
-                                        // check deadlock and wait
+                                        // // check deadlock and wait
                                         transaction = tmpLock -> transaction -> waitLock -> transaction;
+                                        if (transaction == NULL) {
+                                            // aborted transaction
+                                            tmpLock = tmpLock -> prev;
+                                            while (tmpLock != NULL) {
+                                                if (tmpLock -> tableId = tableId && tmpLock -> key == key) {
+                                                    if (tmpLock -> mode == EXCLUSIVE) {
+                                                        // conflict check deadlock, wait
+                                                        transaction = tmpLock -> transaction;
+                                                        while (transaction -> state == WAITING) {
+                                                            if (transaction -> waitLock -> transaction -> id == transactionId) {
+                                                                lock -> transaction -> acquiredLocks.push_back(lock);
+                                                                pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                                                return DEADLOCK;
+                                                            }
+                                                            transaction = transaction -> waitLock -> transaction;
+                                                        }
+                                                        lock -> transaction -> state = WAITING;
+                                                        lock -> transaction -> waitLock = tmpLock;
+                                                        pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                                        return CONFLICT;
+                                                    } else if (tmpLock -> mode == SHARED) {
+                                                        if (tmpLock -> acquired == true) {
+                                                            // can acquire lock
+                                                            lock -> acquired = true;
+                                                            lock -> transaction -> state = RUNNING;
+                                                            lock -> transaction -> waitLock = NULL;
+                                                            pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                                            return LOCKSUCCESS;
+                                                        } else {
+                                                            // if waiting, continue
+                                                            tmpLock = tmpLock -> prev;
+                                                            continue;
+                                                        }
+                                                    }
+                                                    break;
+                                                }
+                                                tmpLock = tmpLock -> prev;
+                                            }
+                                            if (tmpLock == NULL) {
+                                                lock -> acquired = true;
+                                                lock -> transaction -> state = RUNNING;
+                                                lock -> transaction -> waitLock = NULL;
+                                                pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                                                return LOCKSUCCESS;
+                                            }
+                                        }
                                         while (transaction -> state == WAITING) {
                                             // TODO: transaction can be NULL, fix this
                                             if (transaction -> waitLock -> transaction -> id == transactionId) {
@@ -259,7 +306,6 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
                                         }
                                         lock -> transaction -> state = WAITING;
                                         lock -> transaction -> waitLock = tmpLock -> transaction -> waitLock;
-
                                         pthread_mutex_unlock(&lockManager.lockManagerMutex);
                                         return CONFLICT;
                                     } else {

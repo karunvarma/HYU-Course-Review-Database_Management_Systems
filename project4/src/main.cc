@@ -162,7 +162,7 @@ int main( int argc, char ** argv ) {
     pthread_t initThread;
     int initRet;
     int NUM_THREAD;
-    NUM_THREAD = 50;
+    NUM_THREAD = 5;
     pthread_t thread[NUM_THREAD];
     pthread_t thread2[NUM_THREAD];
     pthread_t thread3[NUM_THREAD];
