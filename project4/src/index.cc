@@ -871,9 +871,9 @@ int db_find(int tableId, int64_t key, char* retVal, int transactionId) {
 
     page_t* page;
     pagenum_t leafPageNum;
-    int done = 0;
+    bool done = false;
     int indexOfKey = 0;
-
+    int ret;
     while (!done) {
         pthread_mutex_lock(&bufferPoolMutex);
         leafPageNum = findLeaf(tableId, key);
@@ -908,10 +908,10 @@ int db_find(int tableId, int64_t key, char* retVal, int transactionId) {
             // inform to client, not abort
             printf("[ERROR]: indexOfKey == ((leafPage_t*)page) -> numOfKeys\n");
             bufferUnpinPage(tableId, leafPageNum);
+            bufferUnlockBufferPage(tableId, leafPageNum);
             return FAIL;
         } 
 
-        int ret;
         // acquire record lock
         ret = acquireRecordLock(tableId, leafPageNum, key, SHARED, transactionId);
 
@@ -968,9 +968,9 @@ int db_update(int tableId, int64_t key, char* values, int transactionId) {
 
     page_t* page;
     pagenum_t leafPageNum;
-    int done = 0;
+    bool done = false;
     int indexOfKey = 0;
-
+    int ret;
     while (!done) {
         pthread_mutex_lock(&bufferPoolMutex);
         leafPageNum = findLeaf(tableId, key);
@@ -1007,10 +1007,11 @@ int db_update(int tableId, int64_t key, char* values, int transactionId) {
             // inform to client, not abort
             printf("[ERROR]: indexOfKey == ((leafPage_t*)page) -> numOfKeys\n");
             bufferUnpinPage(tableId, leafPageNum);
+            bufferUnlockBufferPage(tableId, leafPageNum);
             return FAIL;
         } 
 
-        int ret;
+        
         // acquire record lock
         ret = acquireRecordLock(tableId, leafPageNum, key, EXCLUSIVE, transactionId);
 
