@@ -131,29 +131,29 @@ int end_trx(int transactionId) {
 }
 
 int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode, int transactionId) {
-    lock_t* newLock, * waitLock, * lock, * tail; 
+    lock_t* conflictLock, * lock, * tail; 
     transaction_t* transaction;
     std::list<lock_t*>::iterator it;
-
+    bool isWokeUp;
     pthread_mutex_lock(&lockManager.lockManagerMutex);
-
+    isWokeUp = false;
     tail = lockManager.lockTable[pageNum].second;
     lock = tail;
 
     if (lock == NULL) {
-        newLock = (lock_t *)malloc(sizeof(struct lock_t));
-        newLock -> transaction = &transactionManager.transactionTable[transactionId];
-        transactionManager.transactionTable[transactionId].acquiredLocks.push_back(newLock);
-        newLock -> tableId = tableId;
-        newLock -> pageNum = pageNum;
-        newLock -> key = key;
-        newLock -> acquired = true;
-        newLock -> mode = mode;
+        lock = (lock_t *)malloc(sizeof(struct lock_t));
+        lock -> transaction = &transactionManager.transactionTable[transactionId];
+        transactionManager.transactionTable[transactionId].acquiredLocks.push_back(lock);
+        lock -> tableId = tableId;
+        lock -> pageNum = pageNum;
+        lock -> key = key;
+        lock -> acquired = true;
+        lock -> mode = mode;
 
-        newLock -> prev = NULL;
-        newLock -> next = NULL;
-        lockManager.lockTable[pageNum].first = newLock;
-        lockManager.lockTable[pageNum].second = newLock;
+        lock -> prev = NULL;
+        lock -> next = NULL;
+        lockManager.lockTable[pageNum].first = lock;
+        lockManager.lockTable[pageNum].second = lock;
 
         pthread_mutex_unlock(&lockManager.lockManagerMutex);
         return LOCKSUCCESS;
@@ -162,11 +162,72 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
     transaction = &transactionManager.transactionTable[transactionId];
     if (!(transaction -> acquiredLocks.empty())) {
 
-        for(it = transaction -> acquiredLocks.begin();it != transaction -> acquiredLocks.end();it++){ 
-
-        } 
+        for(it = transaction -> acquiredLocks.begin(); it != transaction -> acquiredLocks.end(); it++){ 
+            if ((*it) -> tableId == tableId && (*it) -> key == key) {
+                if ((*it) -> mode == SHARED && mode == EXCLUSIVE) {
+                    // should push lock? think not
+                    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                    return DEADLOCK;
+                } else {
+                    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                    return LOCKSUCCESS;
+                }
+            }
+        }
     }
 
+    lock = tail;
+
+    // check this transaction woke up by other transaction
+    while (lock != NULL) {
+        if (lock -> transaction -> id == transactionId && lock -> tableId == tableId && lock -> key == key && lock -> mode == mode && lock -> acquired == false){
+            isWokeUp = true;
+            tail = lock;
+            break;
+        }
+        lock = lock -> prev;
+    }
+
+    // lock is NULL (not woke up) or (woke up)
+
+    // check conflict
+    conflictLock = tail -> prev;
+
+    while (conflictLock != NULL) {
+        if (conflictLock -> tableId == tableId && conflictLock -> key == key) {
+            if (conflictLock -> mode == SHARED && mode == SHARED) {
+                conflictLock = conflictLock -> prev;
+                continue;
+            }
+            // check deadlock
+            transaction = conflictLock -> transaction;
+            while (transaction -> state == WAITING) {
+                if (transaction -> waitLock -> transaction -> id == transactionId) {
+                    if (isWokeUp) {
+                        lock -> transaction -> acquiredLocks.push_back(lock);
+                    }
+                    pthread_mutex_unlock(&lockManager.lockManagerMutex);
+                    return DEADLOCK;
+                }
+                transaction = transaction -> waitLock -> transaction;
+            }
+            if (isWokeUp) {
+                lock -> transaction -> state = WAITING;
+                lock -> transaction -> waitLock = conflictLock;
+            } else {
+                lock = (lock_t*)malloc(sizeof(struct lock_t));
+
+            }
+            pthread_mutex_unlock(&lockManager.lockManagerMutex);
+            return CONFLICT;
+        }
+        conflictLock = conflictLock -> prev;
+    }
+    
+    // no conflict lock , lock success
+
+
+    
 
 }
 // TODO: 근본적 구조가 잘못됨. 다시 만들기.
