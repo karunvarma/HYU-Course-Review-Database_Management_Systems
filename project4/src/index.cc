@@ -889,7 +889,7 @@ int db_find(int tableId, int64_t key, char* retVal, int transactionId) {
         page = bufferRequestPage(tableId, leafPageNum);
 
         if (bufferLockBufferPage(tableId, leafPageNum) == FAIL) {
-            bufferUnpinPage(tableId, leafPageNum);
+            // bufferUnpinPage(tableId, leafPageNum);
             pthread_mutex_unlock(&bufferPoolMutex);
             continue;
         }

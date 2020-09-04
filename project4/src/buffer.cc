@@ -208,21 +208,6 @@ int bufferMakeDirty(int tableId, pagenum_t pageNum) {
     }
 }
 
-int bufferPinPage(int tableId, pagenum_t pageNum) {
-    bufferPage_t* bufferPage;
-
-    bufferPage = bufferFindBufferPage(tableId, pageNum);
-
-    if (bufferPage == NULL) {
-        //for debug
-        printf("should not execute this line\n");
-        return FAIL;
-    } else {
-        (bufferPage -> isPinned)++;
-        return SUCCESS;
-    }
-}
-
 int bufferUnpinPage(int tableId, pagenum_t pageNum) {
     bufferPage_t* bufferPage;
 
@@ -301,6 +286,7 @@ int bufferLockBufferPage(int tableId, pagenum_t pageNum) {
             // lock success
             return SUCCESS;
         } else {
+            (bufferPage -> isPinned)--;
             // lock fail
             return FAIL;
         }
