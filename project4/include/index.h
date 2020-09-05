@@ -36,6 +36,7 @@ int insertIntoInternalAfterSplitting(int tableId, pagenum_t parentPageNum, int l
 int db_find(int tableId, int64_t key, char *ret_val);
 //pinMax: 1
 pagenum_t findLeaf(int tableId, int64_t key);
+pagenum_t findLeaf2(int tableId, int64_t key);
 
 //pinMax: 2
 int db_delete(int tableId, int64_t key);

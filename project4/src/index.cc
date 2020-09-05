@@ -397,6 +397,52 @@ pagenum_t findLeaf(int tableId, int64_t key) {
     return leafPageNum;
 }
 
+ pagenum_t findLeaf2(int tableId, int64_t key) {
+    page_t* page, * header;
+    pagenum_t leafPageNum, rootPageNum, prevLeafPageNum;
+    int i = 0;
+
+    header = bufferRequestAndLockPage(tableId, HEADERPAGENUM);
+    if (header == NULL) {
+        return 0;
+    }
+    rootPageNum = ((headerPage_t*)header) -> rootPageNum;
+    bufferUnpinPage(tableId, HEADERPAGENUM);
+    bufferUnlockBufferPage(tableId, HEADERPAGENUM);
+
+
+    page = bufferRequestAndLockPage(tableId, rootPageNum);
+    if (page == NULL) {
+        return 0;
+    }
+    leafPageNum = rootPageNum;
+    while (!((internalPage_t*)page) -> isLeaf) {
+        i = 0;
+        while (i < ((internalPage_t*)page) -> numOfKeys) {
+            if (key < ((internalPage_t*)page) -> record[i].key) {
+                break;
+            } else {
+                i++;
+            }
+        }
+        prevLeafPageNum = leafPageNum;
+        if (i == 0) {
+            leafPageNum = ((internalPage_t*)page) -> leftMostPageNum;
+        } else {
+            leafPageNum = ((internalPage_t*)page) -> record[i - 1].pageNum;
+        }
+        bufferUnpinPage(tableId, prevLeafPageNum);
+        bufferUnlockBufferPage(tableId, prevLeafPageNum);
+        page = bufferRequestAndLockPage(tableId, leafPageNum);
+        if (page == NULL) {
+            return 0;
+        }
+    }
+    bufferUnpinPage(tableId, leafPageNum);
+    bufferUnlockBufferPage(tableId, leafPageNum);
+    return leafPageNum;
+}
+
 // delete
 // Find the matching record and delete it if found.
 // If success, return 0. Otherwise, return non-zero value.
@@ -876,23 +922,25 @@ int db_find(int tableId, int64_t key, char* retVal, int transactionId) {
     int ret;
     while (!done) {
         pthread_mutex_lock(&bufferPoolMutex);
-        leafPageNum = findLeaf(tableId, key);
-
-        // if no root page.
+        leafPageNum = findLeaf2(tableId, key);
+        
+        // bufferpage lock fail in findleaf2
         if (leafPageNum == 0) {
-            // not abort, just inform to client
-            pthread_mutex_unlock(&bufferPoolMutex);
-            printf("[ERROR]: findleaf = 0\n");
-            return FAIL;
-        }
-
-        page = bufferRequestPage(tableId, leafPageNum);
-
-        if (bufferLockBufferPage(tableId, leafPageNum) == FAIL) {
-            // bufferUnpinPage(tableId, leafPageNum);
             pthread_mutex_unlock(&bufferPoolMutex);
             continue;
         }
+
+        page = bufferRequestAndLockPage(tableId, leafPageNum);
+
+        if (page == NULL) {
+            pthread_mutex_unlock(&bufferPoolMutex);
+            continue;
+        }
+        // if (bufferLockBufferPage(tableId, leafPageNum) == FAIL) {
+        //     // bufferUnpinPage(tableId, leafPageNum);
+        //     pthread_mutex_unlock(&bufferPoolMutex);
+        //     continue;
+        // } 
         pthread_mutex_unlock(&bufferPoolMutex);
 
         indexOfKey = 0;
@@ -973,23 +1021,16 @@ int db_update(int tableId, int64_t key, char* values, int transactionId) {
     int ret;
     while (!done) {
         pthread_mutex_lock(&bufferPoolMutex);
-        leafPageNum = findLeaf(tableId, key);
+        leafPageNum = findLeaf2(tableId, key);
 
-        // if no root page.
         if (leafPageNum == 0) {
-            // not abort, just inform to client
             pthread_mutex_unlock(&bufferPoolMutex);
-            printf("[ERROR]: findleaf = 0\n");
-            return FAIL;
+            continue;
         }
 
-        page = bufferRequestPage(tableId, leafPageNum);
-
-        if (bufferLockBufferPage(tableId, leafPageNum) == FAIL) {
-
-            bufferUnpinPage(tableId, leafPageNum);
+        page = bufferRequestAndLockPage(tableId, leafPageNum);
+        if (page == NULL) {
             pthread_mutex_unlock(&bufferPoolMutex);
-
             continue;
         }
         pthread_mutex_unlock(&bufferPoolMutex);

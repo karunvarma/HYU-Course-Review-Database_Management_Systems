@@ -278,17 +278,14 @@ int abortTransaction(int transactionId) {
     for (rit = transaction -> undoLogList.rbegin(); rit != transaction -> undoLogList.rend(); ++rit) {
         while (true) {
             pthread_mutex_lock(&bufferPoolMutex);
-            pageNum = findLeaf(rit -> tableId, rit -> key);
+            pageNum = findLeaf2(rit -> tableId, rit -> key);
 
             if (pageNum == 0) {
-                printf("[ERROR]: pageNum == 0\n");
                 pthread_mutex_unlock(&bufferPoolMutex);
-                return FAIL;
+                continue;
             }
-            page = bufferRequestPage(rit -> tableId, pageNum);
-
-            if (bufferLockBufferPage(rit -> tableId, pageNum) == FAIL) {
-                bufferUnpinPage(rit -> tableId, pageNum);
+            page = bufferRequestAndLockPage(rit -> tableId, pageNum);
+            if (page == NULL) {
                 pthread_mutex_unlock(&bufferPoolMutex);
                 continue;
             }

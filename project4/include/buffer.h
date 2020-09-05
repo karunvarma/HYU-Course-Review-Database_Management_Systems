@@ -73,4 +73,6 @@ int bufferLockBufferPage(int tableId, pagenum_t pageNum);
 int bufferUnlockBufferPage(int tableId, pagenum_t pageNum);
 
 
+page_t* bufferRequestAndLockPage(int tableId, pagenum_t pageNum);
+
 #endif /* __BUFFER_H_*/
