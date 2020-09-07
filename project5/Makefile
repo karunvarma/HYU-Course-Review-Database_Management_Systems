@@ -11,7 +11,7 @@ TARGET_SRC:=$(SRCDIR)main.cc
 TARGET_OBJ:=$(SRCDIR)main.o
 
 # Include more files if you write another source file.
-SRCS_FOR_LIB:=$(SRCDIR)index.cc $(SRCDIR)file.cc $(SRCDIR)buffer.cc $(SRCDIR)transaction.cc
+SRCS_FOR_LIB:=$(SRCDIR)index.cc $(SRCDIR)file.cc $(SRCDIR)buffer.cc $(SRCDIR)transaction.cc $(SRCDIR)log.cc
 OBJS_FOR_LIB:=$(SRCS_FOR_LIB:.cc=.o)
 
 CXXFLAGS+= -g -fPIC -I $(INC) -std=c++11
@@ -24,7 +24,7 @@ $(TARGET): $(TARGET_OBJ)
 	$(CC) $(CXXFLAGS) -o $@ $^ -L $(LIBS) -lbpt -lpthread
 
 clean:
-	rm -f $(TARGET) $(TARGET).exe $(TARGET_OBJ) $(OBJS_FOR_LIB) $(LIBS)*.a db_table*
+	rm -f $(TARGET) $(TARGET).exe $(TARGET_OBJ) $(OBJS_FOR_LIB) $(LIBS)*.a db_table* DATA*
 
 library:
 	gcc -shared -Wl,-soname,libbpt.so -o $(LIBS)libbpt.so $(OBJS_FOR_LIB)
