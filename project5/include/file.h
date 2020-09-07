@@ -31,7 +31,8 @@ typedef struct headerPage_t {
     pagenum_t freePageNum;
     pagenum_t rootPageNum;
     uint64_t numOfPages;
-    char headerPageReserved[PAGESIZE - 24];
+    uint64_t pageLSN;
+    char headerPageReserved[PAGESIZE - 32];
 } headerPage_t;
 
 typedef struct freePage_t {
@@ -47,7 +48,9 @@ typedef struct internalPage_t {
     pagenum_t parentPageNum;
     int isLeaf;
     int numOfKeys;
-    char internalPageHeaderReserved[104];
+    char internalPageHeaderReserved[8];
+    uint64_t pageLSN;
+    char internalPageHeaderReserved2[88];
     pagenum_t leftMostPageNum;
     internalRecord_t record[248];
 } internalPage_t;
@@ -59,13 +62,17 @@ typedef struct leafPage_t {
     pagenum_t parentPageNum;
     int isLeaf;
     int numOfKeys;
-    char leafPageHeaderReserved[104];
+    char leafPageHeaderReserved[8];
+    uint64_t pageLSN;
+    char leafPageHeaderReserved2[88];
     pagenum_t rightSiblingPageNum;  //If rightmost leaf page, right sibling page number field is 0.
     leafRecord_t record[31];
 } leafPage_t;
 
 typedef struct page_t {
-    char reserved[PAGESIZE];
+    char reserved[24];
+    uint64_t pageLSN;
+    char reserved2[PAGESIZE - 32];
 } page_t;
 
 // if file already exists, open : return 1 
