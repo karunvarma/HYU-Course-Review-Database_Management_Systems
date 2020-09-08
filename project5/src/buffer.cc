@@ -7,9 +7,7 @@ int numOfBuffer = 0;
 table* tables = NULL;
 int numOfTables = 0;
 
-// open table and store table's information
-// return tableId(= numOfTables)
-// from 0 ~
+// pathname : DATA[NUM] , NUM is tableId
 int bufferOpenTable(char* pathname) {
     if (file_open_table(pathname) == 0) { //not exist
         //init table
@@ -21,9 +19,10 @@ int bufferOpenTable(char* pathname) {
         free(header);
     }
     numOfTables++;
+    std::string str(pathname + 4);
     tables = (table*)realloc(tables, sizeof(struct table) * numOfTables);
     tables[numOfTables - 1].fd = fd;
-    tables[numOfTables - 1].tableId = numOfTables;
+    tables[numOfTables - 1].tableId = std::stoi(str);
     return numOfTables;
 }
 
