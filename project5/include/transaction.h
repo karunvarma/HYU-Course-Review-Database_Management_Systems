@@ -10,8 +10,6 @@
 #include <utility>
 #include <stdlib.h>
 
-// next two headers for abortTransaction.
-// TODO: should the function defined in the index cc?
 #include "buffer.h"
 #include "index.h"
 
@@ -77,9 +75,9 @@ typedef struct transaction_t {
 
     lock_t* waitLock;
 
-    // TODO: undologlist
     std::list<undoLog_t> undoLogList;
 
+    uint64_t lastLSN;
 } transaction_t;
 
 typedef struct lock_t {
