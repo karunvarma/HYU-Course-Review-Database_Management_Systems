@@ -24,7 +24,7 @@ $(TARGET): $(TARGET_OBJ)
 	$(CC) $(CXXFLAGS) -o $@ $^ -L $(LIBS) -lbpt -lpthread
 
 clean:
-	rm -f $(TARGET) $(TARGET).exe $(TARGET_OBJ) $(OBJS_FOR_LIB) $(LIBS)*.a db_table* DATA*
+	rm -f $(TARGET) $(TARGET).exe $(TARGET_OBJ) $(OBJS_FOR_LIB) $(LIBS)*.a DATA* LOGFILE
 
 library:
 	gcc -shared -Wl,-soname,libbpt.so -o $(LIBS)libbpt.so $(OBJS_FOR_LIB)
