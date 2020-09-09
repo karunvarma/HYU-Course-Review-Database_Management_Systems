@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <string>
 #include "file.h"
+#include "log.h"
 
 #define SUCCESS 0
 #define FAIL -1

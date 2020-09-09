@@ -7,9 +7,10 @@
 #include <string.h>
 #include <iostream>
 #include <string>
-#include "../include/file.h"
-#include "../include/buffer.h"
-#include "../include/transaction.h"
+#include "file.h"
+#include "buffer.h"
+#include "transaction.h"
+#include "log.h"
 
 #define SUCCESS 0
 #define FAIL -1
