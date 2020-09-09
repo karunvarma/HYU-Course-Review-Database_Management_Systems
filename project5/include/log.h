@@ -6,7 +6,9 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <map>
+#include "transaction.h"
+#include "buffer.h"
 #pragma pack(push, 1)
 #define LOG_FILE_NAME "LOGFILE"
 
@@ -32,11 +34,16 @@ typedef struct log_t {
 
 int initLog();
 int openLogFile();
-int addLog(uint64_t LSN, int transactionId, logType type);
-int addLog(uint64_t LSN, int transactionId, logType type, int tableId, uint32_t pageNum, uint32_t offset, uint32_t dataLen, char* oldImage, char* newImage);
+int addLog(int transactionId, logType type);
+uint64_t addLog(int transactionId, logType type, int tableId, uint32_t pageNum, uint32_t offset, uint32_t dataLen, char* oldImage, char* newImage);
 
 int readLog(uint64_t prevLSN, log_t* dest);
 int flushLogBuffer();
+
+int recovery();
+int analysisPass(std::map<int, uint64_t>& loser);
+int redoPass();
+int undoPass(std::map<int, uint64_t>& loser);
 
 #pragma pack(pop)
 #endif /* __LOG_H_*/
