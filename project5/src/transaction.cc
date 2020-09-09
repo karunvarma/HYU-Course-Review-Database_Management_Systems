@@ -32,6 +32,8 @@ int begin_trx() {
     newTransactionId = transactionManager.nextTransactionId;
     newTransaction.id = newTransactionId;
 
+    addLog(newTransactionId, BEGIN);
+
     // 3 Insert a new transaction structure in the transaction table. 
     transactionManager.transactionTable[newTransactionId] = newTransaction;
 
@@ -55,6 +57,7 @@ int end_trx(int transactionId) {
         // fail return 0
         return 0;
     }
+    
     transaction = &transactionManager.transactionTable[transactionId];
     
     // 1 Acquire the lock table latch.
@@ -63,6 +66,9 @@ int end_trx(int transactionId) {
     // transaction(lock node).
     lock_t* acquiredLock, * lock;
 
+    addLog(transactionId, COMMIT);
+    flushLogBuffer();
+    
     while (!(transaction -> acquiredLocks.empty())) {
 
         acquiredLock = transaction -> acquiredLocks.front();
@@ -126,8 +132,8 @@ int end_trx(int transactionId) {
     // 6 Release the transaction system latch.
     pthread_mutex_unlock(&transactionManager.transactionManagerMutex);
     
-    // 7 Return the transaction id.
-    return transactionId;
+    // 7 Return 0
+    return SUCCESS;
 }
 
 int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode, int transactionId) {
@@ -263,11 +269,13 @@ int acquireRecordLock(int tableId, uint64_t pageNum, int64_t key, lockMode mode,
     return LOCKSUCCESS;
 }
 
-int abortTransaction(int transactionId) {
+int abort_trx(int transactionId) {
     transaction_t* transaction;
     pagenum_t pageNum;
     page_t* page;
     int i;
+
+    addLog(transactionId, ABORT);
 
     transaction = &transactionManager.transactionTable[transactionId];
 

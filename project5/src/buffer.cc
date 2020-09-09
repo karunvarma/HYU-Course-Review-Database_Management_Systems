@@ -123,6 +123,7 @@ page_t* bufferRequestPage(int tableId, pagenum_t pageNum) {
         if (bufferPage -> isPinned == 0) {
             //found victim
             if (bufferPage -> isDirty) {
+                flushLogBuffer();
                 fd = bufferGetFdOfTable(bufferPage -> tableId);
                 file_write_page(bufferPage -> pageNum, &bufferPage -> page);
             }

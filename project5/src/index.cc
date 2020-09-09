@@ -686,7 +686,6 @@ int redistributePages(int tableId, pagenum_t neighborPageNum, int64_t kPrime, pa
     page_t* child, * neighbor, * page, * parent;
     pagenum_t childPageNum, parentPageNum;
 
-    // TODO: check  page's numkey == 0
     // if (((internalPage_t*)page) -> numOfKeys != 0) {
     //     printf("something's wrong \n");
     //     return FAIL;
@@ -762,7 +761,9 @@ int open_table(char *pathname) {
 // • Initialize other fields (state info, LRU info..) with your own design.
 // • If success, return 0. Otherwise, return non-zero value.
 int init_db(int buf_num) {
-    return bufferInitDb(buf_num);
+    bufferInitDb(buf_num);
+    recovery();
+    return 0;
 }
 
 // Write all pages of this table from buffer to disk and discard the table id.
@@ -979,7 +980,6 @@ int db_find(int tableId, int64_t key, char* retVal, int transactionId) {
             pthread_mutex_unlock(&lockManager.lockManagerMutex);
             // sleep wait
             transaction_t* transaction;
-            // TODO: should lock transaction manager?
             transaction =  &transactionManager.transactionTable[transactionId];
             pthread_mutex_lock(&transaction -> transactionMutex);
             transaction -> state = WAITING;
@@ -994,7 +994,7 @@ int db_find(int tableId, int64_t key, char* retVal, int transactionId) {
             bufferUnlockBufferPage(tableId, leafPageNum);
 
             // abort transaction,
-            abortTransaction(transactionId);
+            abort_trx(transactionId);
             
             // return FAIL
             return FAIL;
@@ -1019,6 +1019,7 @@ int db_update(int tableId, int64_t key, char* values, int transactionId) {
     bool done = false;
     int indexOfKey = 0;
     int ret;
+
     while (!done) {
         pthread_mutex_lock(&bufferPoolMutex);
         leafPageNum = findLeaf2(tableId, key);
@@ -1057,6 +1058,9 @@ int db_update(int tableId, int64_t key, char* values, int transactionId) {
         ret = acquireRecordLock(tableId, leafPageNum, key, EXCLUSIVE, transactionId);
 
         if (ret == LOCKSUCCESS) {
+
+            ((leafPage_t*)page) -> pageLSN = addLog(transactionId, UPDATE, tableId, leafPageNum, 128 * (indexOfKey + 1), 120, ((leafPage_t*)page) -> record[indexOfKey].value, values);
+            
             // make log before update
             transaction_t* transaction = &transactionManager.transactionTable[transactionId];
             undoLog_t undoLog = {
@@ -1081,7 +1085,6 @@ int db_update(int tableId, int64_t key, char* values, int transactionId) {
             pthread_mutex_unlock(&lockManager.lockManagerMutex);
             // sleep wait
             transaction_t* transaction;
-            // TODO: should lock transaction manager?
             transaction =  &transactionManager.transactionTable[transactionId];
             pthread_mutex_lock(&transaction -> transactionMutex);
             transaction -> state = WAITING;
@@ -1096,7 +1099,7 @@ int db_update(int tableId, int64_t key, char* values, int transactionId) {
             bufferUnlockBufferPage(tableId, leafPageNum);
 
             // abort transaction,
-            abortTransaction(transactionId);
+            abort_trx(transactionId);
 
             // return FAIL
             return FAIL;
