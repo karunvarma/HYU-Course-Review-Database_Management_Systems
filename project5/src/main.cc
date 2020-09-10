@@ -46,149 +46,26 @@ void printLRUList();
 void printBufferPool();
 void printTables();
 
-void* thread_function(void* arg) {
-    open_table("db_table_test");
-    init_db(10);
 
-    //do insert
+// MAIN
+int main( int argc, char ** argv ) {
+
+    open_table("DATA1");
+    init_db(5);
     db_insert(1, 1, "11");
     db_insert(1, 2, "12");
     db_insert(1, 3, "13");
+    db_insert(1, 4, "14");
 
-    pthread_exit((void*)0);
-}
+    int trx1, trx2;
+    trx1 = begin_trx();
+    db_update(1, 1, "trx1 update key 1", trx1);
+    end_trx(trx1);
 
-void* thread_function2(void* arg) {
-    int transactionId;
-    char retval[120];
-
-    transactionId = begin_trx();
-    printf("[BEGIN TRANSACTION] transactionId: %d\n", transactionId);
-
-    //do find or update
-    db_find(1, 1, retval, transactionId);
-    printf("[FIND] transactionId: %d, tableId: 1, key: 1 value: %s\n", transactionId, retval);
-
-    std::string tmp = "updateval(transactionId: "+ std::to_string(transactionId) + ")";
-    db_update(1,2, (char*) tmp.c_str(), transactionId);
-    std::cout << "[UPDATE] transactionId: "<< transactionId <<", tableid: 1 key: 2 " << "value: " << tmp << std::endl;
-
-    db_find(1, 2, retval, transactionId);
-    printf("[FIND] transactionId: %d, tableId: 1, key: 2 value: %s\n", transactionId, retval);
-
-    db_update(1, 3, (char*) tmp.c_str(), transactionId);
-    std::cout << "[UPDATE] transactionId: "<< transactionId <<", tableid: 1 key: 3 " << "value: " << tmp << std::endl;
-
-    end_trx(transactionId);
-    printf("[END TRANSACTION] transactionId: %d\n", transactionId);
-
-    pthread_exit((void*)123);
-
-}
-
-void* thread_function3(void* arg) {
-    int transactionId;
-    char retval[120];
-
-    transactionId = begin_trx();
-    printf("[BEGIN TRANSACTION] transactionId: %d\n", transactionId);
-
-    //do find or update
-    std::string tmp = "updateval(transactionId: "+ std::to_string(transactionId) + ")";
-    db_update(1, 3, (char*) tmp.c_str(), transactionId);
-    std::cout << "[UPDATE] transactionId: "<< transactionId <<", tableid: 1 key: 3 " << "value: " << tmp << std::endl;
-
-    db_update(1, 1, (char*) tmp.c_str(), transactionId);
-    std::cout << "[UPDATE] transactionId: "<< transactionId <<", tableid: 1 key: 2 " << "value: " << tmp << std::endl;
-
-
-    db_find(1, 2, retval, transactionId);
-    printf("[FIND] transactionId: %d, tableId: 1, key: 2 value: %s\n", transactionId, retval);
-
-    db_find(1, 1, retval, transactionId);
-    printf("[FIND] transactionId: %d, tableId: 1, key: 1 value: %s\n", transactionId, retval);
-
-    end_trx(transactionId);
-    printf("[END TRANSACTION] transactionId: %d\n", transactionId);
-
-    pthread_exit((void*)123);
-
-}
-void* thread_function4(void* arg) {
-    int transactionId;
-    char retval[120];
-
-    transactionId = begin_trx();
-    printf("[BEGIN TRANSACTION] transactionId: %d\n", transactionId);
-
-    //do find or update
-    db_find(1, 3, retval, transactionId);
-    printf("[FIND] transactionId: %d, tableId: 1, key: 3 value: %s\n", transactionId, retval);
-
-    db_find(1, 1, retval, transactionId);
-    printf("[FIND] transactionId: %d, tableId: 1, key: 1 value: %s\n", transactionId, retval);
-
-
-    db_find(1, 2, retval, transactionId);
-    printf("[FIND] transactionId: %d, tableId: 1, key: 2 value: %s\n", transactionId, retval);
-
-    end_trx(transactionId);
-    printf("[END TRANSACTION] transactionId: %d\n", transactionId);
-
-    pthread_exit((void*)123);
-
-}
-void* threadCausingDEADLOCK(void* arg) {
-    int transactionId;
-    char retval[120];
-
-    transactionId = begin_trx();
-    db_find(1, 1, retval, transactionId);
-    db_update(1, 1, "asdfasdf", transactionId);
-    db_find(1, 1, retval, transactionId);
-    end_trx(transactionId);
-    pthread_exit((void*)1234);
-}
-// MAIN
-int main( int argc, char ** argv ) {
-    // open_table("db_table0");
-    // open_table("db_table1");
-    // init_db(10);
-    // tests();
-    // test(2, 1000);
-    // test(2, 1000);
-    // test(1, 1000);
-    // begin_trx();
-    pthread_t initThread;
-    int initRet;
-    int NUM_THREAD;
-    NUM_THREAD = 20;
-    pthread_t thread[NUM_THREAD];
-    pthread_t thread2[NUM_THREAD];
-    pthread_t thread3[NUM_THREAD];
-    pthread_t deadlockThread;
-
-    
-    pthread_create(&initThread, NULL, thread_function, NULL);
-    int tmpret = pthread_join(initThread, (void**)&initRet);
-    for (int i = 0; i < NUM_THREAD; i++) {
-        pthread_create(&thread[i], NULL, thread_function2, NULL);
-    }
-    for (int i = 0; i < NUM_THREAD; i++) {
-        pthread_create(&thread2[i], NULL, thread_function3, NULL);
-    }
-    for (int i = 0; i < NUM_THREAD; i++) {
-        pthread_create(&thread3[i], NULL, thread_function4, NULL);
-    }
-    // pthread_create(&deadlockThread, NULL, threadCausingDEADLOCK, NULL);
-
-
-    for (int i = 0; i < NUM_THREAD; i++) {
-        tmpret = pthread_join(thread[i], (void**)&initRet);
-        tmpret = pthread_join(thread2[i], (void**)&initRet);
-        tmpret = pthread_join(thread3[i], (void**)&initRet);
-    }
-    // pthread_join(deadlockThread, (void**)&initRet);
+    trx2 = begin_trx();
+    db_update(1, 2, "trx2 update key 2", trx2);
+    flushLogBuffer();
+    exit(0);
 
     int inputTableId;
     int inputTableId2;
@@ -638,4 +515,108 @@ void printTables() {
     }
 
     printf("@@@@@@@@@@@@@@@@@@@printTablesEnd@@@@@@@@@@@@@@@@@@@\n");
+}
+
+void* thread_function(void* arg) {
+    open_table("db_table_test");
+    init_db(10);
+
+    //do insert
+    db_insert(1, 1, "11");
+    db_insert(1, 2, "12");
+    db_insert(1, 3, "13");
+
+    pthread_exit((void*)0);
+}
+
+void* thread_function2(void* arg) {
+    int transactionId;
+    char retval[120];
+
+    transactionId = begin_trx();
+    printf("[BEGIN TRANSACTION] transactionId: %d\n", transactionId);
+
+    //do find or update
+    db_find(1, 1, retval, transactionId);
+    printf("[FIND] transactionId: %d, tableId: 1, key: 1 value: %s\n", transactionId, retval);
+
+    std::string tmp = "updateval(transactionId: "+ std::to_string(transactionId) + ")";
+    db_update(1,2, (char*) tmp.c_str(), transactionId);
+    std::cout << "[UPDATE] transactionId: "<< transactionId <<", tableid: 1 key: 2 " << "value: " << tmp << std::endl;
+
+    db_find(1, 2, retval, transactionId);
+    printf("[FIND] transactionId: %d, tableId: 1, key: 2 value: %s\n", transactionId, retval);
+
+    db_update(1, 3, (char*) tmp.c_str(), transactionId);
+    std::cout << "[UPDATE] transactionId: "<< transactionId <<", tableid: 1 key: 3 " << "value: " << tmp << std::endl;
+
+    end_trx(transactionId);
+    printf("[END TRANSACTION] transactionId: %d\n", transactionId);
+
+    pthread_exit((void*)123);
+
+}
+
+void* thread_function3(void* arg) {
+    int transactionId;
+    char retval[120];
+
+    transactionId = begin_trx();
+    printf("[BEGIN TRANSACTION] transactionId: %d\n", transactionId);
+
+    //do find or update
+    std::string tmp = "updateval(transactionId: "+ std::to_string(transactionId) + ")";
+    db_update(1, 3, (char*) tmp.c_str(), transactionId);
+    std::cout << "[UPDATE] transactionId: "<< transactionId <<", tableid: 1 key: 3 " << "value: " << tmp << std::endl;
+
+    db_update(1, 1, (char*) tmp.c_str(), transactionId);
+    std::cout << "[UPDATE] transactionId: "<< transactionId <<", tableid: 1 key: 2 " << "value: " << tmp << std::endl;
+
+
+    db_find(1, 2, retval, transactionId);
+    printf("[FIND] transactionId: %d, tableId: 1, key: 2 value: %s\n", transactionId, retval);
+
+    db_find(1, 1, retval, transactionId);
+    printf("[FIND] transactionId: %d, tableId: 1, key: 1 value: %s\n", transactionId, retval);
+
+    end_trx(transactionId);
+    printf("[END TRANSACTION] transactionId: %d\n", transactionId);
+
+    pthread_exit((void*)123);
+
+}
+void* thread_function4(void* arg) {
+    int transactionId;
+    char retval[120];
+
+    transactionId = begin_trx();
+    printf("[BEGIN TRANSACTION] transactionId: %d\n", transactionId);
+
+    //do find or update
+    db_find(1, 3, retval, transactionId);
+    printf("[FIND] transactionId: %d, tableId: 1, key: 3 value: %s\n", transactionId, retval);
+
+    db_find(1, 1, retval, transactionId);
+    printf("[FIND] transactionId: %d, tableId: 1, key: 1 value: %s\n", transactionId, retval);
+
+
+    db_find(1, 2, retval, transactionId);
+    printf("[FIND] transactionId: %d, tableId: 1, key: 2 value: %s\n", transactionId, retval);
+
+    end_trx(transactionId);
+    printf("[END TRANSACTION] transactionId: %d\n", transactionId);
+
+    pthread_exit((void*)123);
+
+}
+void* threadCausingDEADLOCK(void* arg) {
+    int transactionId;
+    char retval[120];
+
+    transactionId = begin_trx();
+    db_find(1, 1, retval, transactionId);
+    db_update(1, 1, "asdfasdf", transactionId);
+    db_find(1, 1, retval, transactionId);
+    end_trx(transactionId);
+    pthread_exit((void*)1234);
 }
