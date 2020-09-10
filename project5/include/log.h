@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <map>
+#include <list>
 #include "transaction.h"
 #include "buffer.h"
 #pragma pack(push, 1)
@@ -41,9 +42,9 @@ int readLog(uint64_t prevLSN, log_t* dest);
 int flushLogBuffer();
 
 int recovery();
-int analysisPass(std::map<int, uint64_t>& loser);
+int analysisPass(std::map<int, std::list<log_t> >& loser);
 int redoPass();
-int undoPass(std::map<int, uint64_t>& loser);
+int undoPass(std::map<int, std::list<log_t> >& loser);
 
 #pragma pack(pop)
 #endif /* __LOG_H_*/

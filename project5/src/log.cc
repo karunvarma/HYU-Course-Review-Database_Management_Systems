@@ -117,22 +117,18 @@ int flushLogBuffer() {
     return 0;
 }
 
-// TODO: definition of prevLSN of log structure is different, at lecture pdf, project pdf
-// :: prevLSN is just start of the log, or log's transaction's prevlog's lsn?
-// TODO: reread lecture pdf
-
 int recovery() {
     if (logFd == 0) {
         initLog();
     }
     // map transactionId : last prevLSN
-    std::map<int, uint64_t> loser;
+    std::map<int, std::list<log_t> > loser;
     analysisPass(loser);
     redoPass();
     undoPass(loser);
 }
 
-int analysisPass(std::map<int, uint64_t>& loser) {
+int analysisPass(std::map<int, std::list<log_t> >& loser) {
     // determine losers
     uint64_t prevLSN;
     log_t* log;
@@ -142,8 +138,24 @@ int analysisPass(std::map<int, uint64_t>& loser) {
     prevLSN = 0;
     while (prevLSN != lastLSN) {
         readLog(prevLSN, log);
+        if (loser.find(log -> transactionId) != loser.end()) {
+            if (log -> type == UPDATE) {
+                for (auto it = loser[log -> transactionId].begin(); it != loser[log -> transactionId].end(); it++) {
+                    if (it -> type == log -> type &&
+                        it -> tableId == log -> tableId &&
+                        it -> pageNum == log -> pageNum &&
+                        it -> offset == log -> offset) {
+                        // there already log exists on the same record.
+                        // since we assume there's no double write in this project
+                        // this is compensation log
+                        loser[log -> transactionId].erase(it);
+                        break; 
+                    }
+                }
+            }
+        }
+        loser[log -> transactionId].push_back(*log);
 
-        loser[log -> transactionId] = log -> prevLSN;
         if (log -> type == COMMIT) {
             loser.erase(log -> transactionId);
         }
@@ -177,7 +189,7 @@ int redoPass() {
         if (((leafPage_t*)page) -> pageLSN  < log -> LSN) {
             strcpy(((leafPage_t*)page) -> record[(log -> offset)/128 - 1].value, log -> newImage);
             bufferMakeDirty(log -> tableId, log -> pageNum);
-        }
+        } 
         bufferUnpinPage(log -> tableId, log -> pageNum);
         prevLSN = log -> LSN;
     }
@@ -185,35 +197,49 @@ int redoPass() {
     free(log);
     return 0;
 }
-int undoPass(std::map<int, uint64_t>& loser) {
+int undoPass(std::map<int, std::list<log_t> >& loser) {
 
-    // map transactionId : last prevLSN
-    std::map<int, uint64_t> activeTransaction;
     uint64_t prevLSN;
+    uint64_t newLogLSN;
     log_t* log;
     pagenum_t pageNum;
     page_t* page;
     
     log = (log_t*)malloc(sizeof(struct log_t));
 
-    for (auto it = loser.begin(); it != loser.end(); it++) {
-        activeTransaction[it -> first] = it -> second;
-    }
-
     int nextTransactionId;
     uint64_t nextEntry;
 
     while (!loser.empty()) {
         nextTransactionId = loser.begin() -> first;
+
         for (auto it = loser.begin(); it != loser.end(); it++) {
-            if (loser[nextTransactionId] < it -> second) {
+            if (loser[nextTransactionId].back().LSN < (it -> second).back().LSN) {
                 nextTransactionId = it -> first;
             }
         }
-        nextEntry = loser[nextTransactionId];
+        nextEntry = loser[nextTransactionId].back().prevLSN;
 
-        readLog
 
+        readLog(nextEntry, log);
+        if (log -> type == UPDATE) {
+
+            page = bufferRequestPage(log -> tableId, log -> pageNum);
+
+            if (((leafPage_t*)page) -> pageLSN  < log -> LSN) {
+                newLogLSN = addLog(log -> transactionId, UPDATE, log -> tableId, log -> pageNum, log -> offset, log -> dataLen, log -> newImage,  log -> oldImage);
+                strcpy(((leafPage_t*)page) -> record[(log -> offset)/128 - 1].value, log -> oldImage);
+                page -> pageLSN = newLogLSN;
+                bufferMakeDirty(log -> tableId, log -> pageNum);
+                bufferUnpinPage(log -> tableId, log -> pageNum);
+                
+            }
+            loser[log -> transactionId].pop_back();
+        }
+
+        if (log -> type == BEGIN) {
+            loser.erase(log -> transactionId);
+        }
     }
     
     
